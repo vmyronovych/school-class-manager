@@ -20,7 +20,7 @@ describe('AppLayout', () => {
   it('renders the Students page with mockup data', async () => {
     renderAt('/students');
 
-    expect(await screen.findByText('4a.bondar')).toBeInTheDocument();
+    expect(await screen.findByText('bondar.oleksii.2016')).toBeInTheDocument();
     expect(screen.getByText('Заблокований')).toBeInTheDocument();
     expect(screen.getByText('Скинути пароль')).toBeInTheDocument();
     expect(screen.getByText('Вибрано: 1')).toBeInTheDocument();

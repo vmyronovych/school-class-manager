@@ -5,21 +5,27 @@ namespace Scm.Core.Tests;
 public class ClassCodeTests
 {
     [Theory]
-    [InlineData("4a")]
-    [InlineData("11b")]
-    public void AcceptsValid(string value)
+    [InlineData("2025-4a", 2025)]
+    [InlineData("2026-11b", 2026)]
+    public void AcceptsValid(string value, int schoolYear)
     {
-        new ClassCode(value).Value.Should().Be(value);
+        var code = new ClassCode(value);
+
+        code.Value.Should().Be(value);
+        code.SchoolYear.Should().Be(schoolYear);
     }
 
     [Theory]
     [InlineData("..")]
-    [InlineData("../4a")]
-    [InlineData("4a/..")]
-    [InlineData("4A")]
-    [InlineData("4-А")]
-    [InlineData("123a")]
-    [InlineData("4ab")]
+    [InlineData("../2025-4a")]
+    [InlineData("2025-4a/..")]
+    [InlineData("4a")]
+    [InlineData("2025-4A")]
+    [InlineData("2025-4-А")]
+    [InlineData("2025-123a")]
+    [InlineData("2025-4ab")]
+    [InlineData("1999-4a")]
+    [InlineData("25-4a")]
     public void RejectsInvalid(string value)
     {
         var act = () => new ClassCode(value);

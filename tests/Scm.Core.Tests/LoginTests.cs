@@ -5,9 +5,12 @@ namespace Scm.Core.Tests;
 public class LoginTests
 {
     [Theory]
-    [InlineData("4a.ivanenko", true)]
-    [InlineData("11b.kovalenko.m", true)]
+    [InlineData("ivanenko.petro.2011", true)]
+    [InlineData("kovalenko.a.2011", true)]
+    [InlineData("ivanenko.p.o.2011", true)]
+    [InlineData("bilyi-chornyi.a.2012", true)]
     [InlineData("viktor.admin", false)]
+    [InlineData("v.prizvyshche", false)]
     public void AcceptsStudentAndTeacherLogins(string value, bool isStudent)
     {
         var login = new Login(value);
@@ -18,13 +21,19 @@ public class LoginTests
 
     [Theory]
     [InlineData("..")]
-    [InlineData("4a..ivanenko")]
-    [InlineData("../4a.ivanenko")]
-    [InlineData("4a.ivanenko\\x")]
-    [InlineData("4a.iva nenko")]
-    [InlineData("4A.Ivanenko")]
-    [InlineData("4a.іваненко")]
-    [InlineData("4a.ivanenko;rm")]
+    [InlineData("ivanenko..petro.2011")]
+    [InlineData("../ivanenko.petro.2011")]
+    [InlineData("ivanenko.petro.2011\\x")]
+    [InlineData("ivanenko.pe tro.2011")]
+    [InlineData("Ivanenko.Petro.2011")]
+    [InlineData("іваненко.петро.2011")]
+    [InlineData("ivanenko.petro.2011;rm")]
+    [InlineData("ivanenko.petro.11")]
+    [InlineData("ivanenko.petro.1811")]
+    [InlineData("ivanenko.petro.2011.2")]
+    [InlineData("kovalenko.anastasiia.2011")]
+    [InlineData("kovalenko-shevchenko.a.2012")]
+    [InlineData("4a.ivanenko")]
     public void RejectsInvalid(string value)
     {
         var act = () => new Login(value);

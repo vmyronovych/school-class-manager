@@ -5,9 +5,9 @@ namespace Scm.Core.Tests;
 public class StorePathTests
 {
     [Theory]
-    [InlineData(Share.Home, "4a.ivanenko/Documents")]
-    [InlineData(Share.Home, "4a.ivanenko/Documents/Відновлено 24.09.2026/звіт.docx")]
-    [InlineData(Share.Class, "4a/handouts/..txt")]
+    [InlineData(Share.Home, "ivanenko.petro.2011/Documents")]
+    [InlineData(Share.Home, "ivanenko.petro.2011/Documents/Відновлено 24.09.2026/звіт.docx")]
+    [InlineData(Share.Class, "2025-4a/handouts/..txt")]
     public void AcceptsRelativePathInsideShare(Share share, string relative)
     {
         var path = new StorePath(share, relative);
@@ -19,15 +19,15 @@ public class StorePathTests
     [Theory]
     [InlineData("..")]
     [InlineData("../etc/passwd")]
-    [InlineData("4a.ivanenko/../4a.kovalenko")]
-    [InlineData("4a.ivanenko/..")]
-    [InlineData("./4a.ivanenko")]
+    [InlineData("ivanenko.petro.2011/../kovalenko.a.2011")]
+    [InlineData("ivanenko.petro.2011/..")]
+    [InlineData("./ivanenko.petro.2011")]
     [InlineData("/etc/passwd")]
-    [InlineData("4a.ivanenko\\..\\x")]
-    [InlineData("4a.ivanenko//Documents")]
-    [InlineData("4a.ivanenko/Documents/")]
-    [InlineData("4a.ivanenko/ /x")]
-    [InlineData("4a.ivanenko/a\0b")]
+    [InlineData("ivanenko.petro.2011\\..\\x")]
+    [InlineData("ivanenko.petro.2011//Documents")]
+    [InlineData("ivanenko.petro.2011/Documents/")]
+    [InlineData("ivanenko.petro.2011/ /x")]
+    [InlineData("ivanenko.petro.2011/a\0b")]
     public void RejectsPathsThatCouldLeaveShare(string relative)
     {
         var act = () => new StorePath(Share.Home, relative);
