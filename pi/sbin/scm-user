@@ -1,0 +1,87 @@
+#!/bin/bash
+# Обгортка над samba-tool для School Class Manager.
+# Виклик:  scm-user <op> <login> [args...]   (пароль — зі stdin, ніколи в аргументах)
+# Ops:     create <login> --class 4a --given-name X --surname Y
+#          setpassword <login> [--teacher]
+#          unlock|enable|disable <login> [--teacher]
+#          move <login> <from-class> <to-class>
+set -euo pipefail
+
+LOGIN_RE='^[0-9]{1,2}[a-z]\.[a-z]+(\.[a-z]+)?$'
+TEACHER_RE='^[a-z]+\.[a-z]+(\.[a-z]+)?$'
+CLASS_RE='^[0-9]{1,2}[a-z]$'
+STUDENT_OU='OU=Uchni'
+TEACHER_GROUP='vchyteli'
+ADMIN_GROUP='Domain Admins'
+
+die() { echo "scm-user: $*" >&2; exit 2; }
+log() { logger -t scm-user -- "$*"; }
+
+op="${1:-}"; login="${2:-}"; shift 2 || die "usage"
+[ -n "$op" ] && [ -n "$login" ] || die "usage"
+
+teacher=0
+args=()
+for a in "$@"; do
+  case "$a" in
+    --teacher) teacher=1 ;;
+    *) args+=("$a") ;;
+  esac
+done
+
+in_group() { samba-tool group listmembers "$1" 2>/dev/null | grep -qx "$2"; }
+
+# Ціль ніколи не може бути адміном
+if in_group "$ADMIN_GROUP" "$login"; then die "refused: target is in $ADMIN_GROUP"; fi
+
+if [ "$teacher" = 1 ]; then
+  [[ "$login" =~ $TEACHER_RE ]] || die "bad teacher login"
+  in_group "$TEACHER_GROUP" "$login" || die "refused: not a teacher"
+  case "$op" in setpassword|unlock|enable|disable) ;; *) die "op not allowed with --teacher" ;; esac
+else
+  [[ "$login" =~ $LOGIN_RE ]] || die "bad student login"
+  if [ "$op" != create ]; then
+    dn=$(samba-tool user show "$login" 2>/dev/null | awk -F': ' '/^dn:/{print $2}')
+    [[ "$dn" == *"$STUDENT_OU"* ]] || die "refused: not in $STUDENT_OU"
+  fi
+fi
+
+read_password() { IFS= read -r pw; [ -n "$pw" ] || die "empty password"; }
+
+case "$op" in
+  create)
+    cls=""; gn=""; sn=""
+    set -- "${args[@]}"
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --class) cls="$2"; shift 2 ;;
+        --given-name) gn="$2"; shift 2 ;;
+        --surname) sn="$2"; shift 2 ;;
+        *) die "unknown arg $1" ;;
+      esac
+    done
+    [[ "$cls" =~ $CLASS_RE ]] || die "bad class"
+    [[ "$login" == "$cls".* ]] || die "login must start with class"
+    read_password
+    samba-tool user create "$login" "$pw" --given-name="$gn" --surname="$sn" \
+      --description="$cls" --userou="$STUDENT_OU"
+    samba-tool group addmembers "uchni-$cls" "$login"
+    log "create $login class=$cls"
+    ;;
+  setpassword)
+    read_password
+    samba-tool user setpassword "$login" --newpassword="$pw"
+    log "setpassword $login teacher=$teacher"
+    ;;
+  unlock)  samba-tool user unlock "$login";  log "unlock $login" ;;
+  enable)  samba-tool user enable "$login";  log "enable $login" ;;
+  disable) samba-tool user disable "$login"; log "disable $login" ;;
+  move)
+    from="${args[0]:-}"; to="${args[1]:-}"
+    [[ "$from" =~ $CLASS_RE && "$to" =~ $CLASS_RE ]] || die "bad class"
+    samba-tool group removemembers "uchni-$from" "$login"
+    samba-tool group addmembers "uchni-$to" "$login"
+    log "move $login $from->$to"
+    ;;
+  *) die "unknown op $op" ;;
+esac

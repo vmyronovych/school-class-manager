@@ -1,0 +1,25 @@
+[Unit]
+Description=School Class Manager
+After=network-online.target samba-ad-dc.service srv-data.mount
+Wants=network-online.target
+Requires=samba-ad-dc.service
+
+[Service]
+User=scm
+Group=scm
+WorkingDirectory=/opt/scm/current
+ExecStart=/opt/scm/current/Scm.Api
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=DOTNET_gcServer=0
+Environment=ASPNETCORE_URLS=https://0.0.0.0:443;http://0.0.0.0:80
+AmbientCapabilities=CAP_DAC_OVERRIDE CAP_CHOWN CAP_FOWNER CAP_NET_BIND_SERVICE
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/srv/data /var/lib/scm
+PrivateTmp=yes
+MemoryMax=768M
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

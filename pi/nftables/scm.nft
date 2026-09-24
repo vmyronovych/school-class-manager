@@ -1,0 +1,7 @@
+# /etc/nftables.d/scm.nft — HTTPS/HTTP School Class Manager лише з мережі класу
+table inet scm {
+  chain input {
+    type filter hook input priority 0; policy accept;
+    tcp dport { 80, 443 } ip saddr != 192.168.1.0/24 drop
+  }
+}

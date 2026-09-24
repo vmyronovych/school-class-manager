@@ -1,0 +1,11 @@
+#!/bin/bash
+# scm-logs <unit> [lines]  — тільки білий список юнітів/файлів
+set -euo pipefail
+unit="${1:-}"; n="${2:-200}"
+[[ "$n" =~ ^[0-9]{1,4}$ ]] || n=200
+case "$unit" in
+  samba-ad-dc|scm|scm-update) journalctl -u "$unit" -n "$n" --no-pager -o short-iso ;;
+  snap)   tail -n "$n" /var/log/snap.log ;;
+  backup) tail -n "$n" /var/log/backup.log ;;
+  *) echo "unknown unit" >&2; exit 2 ;;
+esac

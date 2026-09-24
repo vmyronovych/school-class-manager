@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.9.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Scm.Core\Scm.Core.csproj" />
+    <ProjectReference Include="..\Scm.Infrastructure\Scm.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <!-- publish кладе зібраний SPA (web/dist) у wwwroot; спершу npm run build. -->
+  <ItemGroup>
+    <Content Include="..\..\web\dist\**" LinkBase="wwwroot" CopyToPublishDirectory="PreserveNewest" CopyToOutputDirectory="Never" />
+  </ItemGroup>
+
+</Project>

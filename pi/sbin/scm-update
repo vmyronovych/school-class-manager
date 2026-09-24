@@ -1,0 +1,35 @@
+#!/bin/bash
+# Оновлення School Class Manager з GitHub Releases. scm-update [--rollback]
+set -euo pipefail
+REPO="${SCM_REPO:-viktor/school-class-manager}"
+BASE=/opt/scm
+cd "$BASE"
+
+if [ "${1:-}" = "--rollback" ]; then
+  prev=$(readlink -f previous 2>/dev/null || true)
+  [ -n "$prev" ] || { echo "no previous"; exit 1; }
+  ln -sfn "$prev" current; systemctl restart scm; echo "rolled back to $prev"; exit 0
+fi
+
+api="https://api.github.com/repos/$REPO/releases/latest"
+tag=$(curl -fsSL "$api" | grep -m1 '"tag_name"' | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
+ver="${tag#v}"
+[ -d "$BASE/$ver" ] && { echo "already at $ver"; exit 0; }
+url="https://github.com/$REPO/releases/download/$tag/scm-$ver-linux-arm64.tar.gz"
+tmp=$(mktemp -d)
+curl -fsSL -o "$tmp/scm.tar.gz" "$url"
+curl -fsSL -o "$tmp/scm.sha256" "$url.sha256"
+( cd "$tmp" && sed "s/ .*/  scm.tar.gz/" scm.sha256 | sha256sum -c - )
+mkdir -p "$BASE/$ver"
+tar -C "$BASE/$ver" --strip-components=1 -xzf "$tmp/scm.tar.gz"
+chown -R scm:scm "$BASE/$ver"
+[ -e current ] && ln -sfn "$(readlink -f current)" previous
+ln -sfn "$BASE/$ver" current
+systemctl restart scm
+for i in $(seq 1 20); do
+  sleep 1
+  curl -fsk https://127.0.0.1/healthz >/dev/null 2>&1 && { echo "updated to $ver"; rm -rf "$tmp"; exit 0; }
+done
+echo "healthz failed, rolling back" >&2
+"$0" --rollback
+exit 1

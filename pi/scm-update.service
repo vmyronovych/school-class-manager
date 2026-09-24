@@ -1,0 +1,7 @@
+[Unit]
+Description=School Class Manager self-update
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/scm-update
