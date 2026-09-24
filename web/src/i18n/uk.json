@@ -1,0 +1,65 @@
+{
+  "app": {
+    "name": "School Class Manager",
+    "server": "SCHOOL · dc1",
+    "serverOnline_one": "{{host}} онлайн · {{count}} день",
+    "serverOnline_few": "{{host}} онлайн · {{count}} дні",
+    "serverOnline_many": "{{host}} онлайн · {{count}} днів",
+    "serverOnline_other": "{{host}} онлайн · {{count}} дня",
+    "notifications": "Сповіщення"
+  },
+  "nav": {
+    "dashboard": "Огляд",
+    "students": "Учні",
+    "files": "Файли",
+    "server": "Сервер",
+    "settings": "Налаштування"
+  },
+  "stub": {
+    "comingIn": "Цей екран з'явиться на етапі {{milestone}}."
+  },
+  "students": {
+    "allClasses": "Усі класи",
+    "summary": "{{accounts}} облікових записів · {{classes}} класи · {{disabled}} вимкнених",
+    "importCsv": "Імпорт CSV",
+    "loginCards": "Картки логінів",
+    "addStudent": "Учень",
+    "filterAll": "Усі",
+    "filterTeachers": "Вчителі",
+    "searchPlaceholder": "Пошук за прізвищем або логіном",
+    "selected": "Вибрано: {{count}}",
+    "total": "Всього {{total}}",
+    "columns": {
+      "login": "Логін",
+      "name": "Прізвище, ім'я",
+      "class": "Клас",
+      "status": "Статус",
+      "lastLogon": "Останній вхід",
+      "folder": "Папка"
+    },
+    "status": {
+      "Active": "Активний",
+      "Locked": "Заблокований",
+      "NeverLoggedIn": "Не входив",
+      "Disabled": "Вимкнений"
+    },
+    "card": {
+      "login": "Логін",
+      "class": "Клас",
+      "lastLogon": "Останній вхід",
+      "folder": "Папка",
+      "folderValue": "{{files}} файлів · {{size}}",
+      "password": "Пароль",
+      "passwordChanged": "змінено {{date}}",
+      "resetPassword": "Скинути пароль",
+      "files": "Файли",
+      "unlock": "Розблокувати",
+      "move": "Перевести",
+      "disable": "Вимкнути",
+      "snapshots": "Знімки папки",
+      "allSnapshots": "Усі 30 днів",
+      "restore": "Відновити…",
+      "empty": "Виберіть учня в таблиці"
+    }
+  }
+}

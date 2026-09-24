@@ -1,0 +1,25 @@
+#!/bin/bash
+# JSON зі станом Pi для дашборда School Class Manager.
+set -uo pipefail
+uptime_s=$(cut -d. -f1 /proc/uptime)
+load1=$(cut -d' ' -f1 /proc/loadavg)
+read -r _ ram_total ram_used _ < <(free -m | awk '/^Mem:/{print $1,$2,$3}')
+temp=$(vcgencmd measure_temp 2>/dev/null | sed 's/temp=//;s/.C//' || echo null)
+disk() { df -B1 --output=used,size "$1" 2>/dev/null | awk 'NR==2{printf "{\"used\":%s,\"total\":%s}", $1, $2}'; }
+smart() { smartctl -H "$1" 2>/dev/null | grep -q PASSED && echo true || echo false; }
+data_dev=$(findmnt -n -o SOURCE /srv/data 2>/dev/null | sed 's/\[.*//')
+backup_dev=$(findmnt -n -o SOURCE /srv/backup 2>/dev/null | sed 's/\[.*//')
+last_snap=$(ls -1 /srv/data/home/.snapshots 2>/dev/null | sort | tail -1)
+snap_ok=$(tail -1 /var/log/snap.log 2>/dev/null | grep -qi error && echo false || echo true)
+last_backup=$(stat -c %Y /var/log/backup.log 2>/dev/null || echo null)
+backup_ok=$(tail -3 /var/log/backup.log 2>/dev/null | grep -qi 'error\|failed' && echo false || echo true)
+samba=$(samba-tool --version 2>/dev/null || echo "")
+sessions=$(smbstatus -b 2>/dev/null | awk 'NR>4 && NF>=4 && $1 ~ /^[0-9]+$/ {n++} END{print n+0}')
+cat <<JSON
+{"uptimeSec":$uptime_s,"load1":$load1,"ramUsedMb":$ram_used,"ramTotalMb":$ram_total,"tempC":${temp:-null},
+"dataDisk":$(disk /srv/data | sed "s/}/,\"smartOk\":$(smart "$data_dev")}/"),
+"backupDisk":$(disk /srv/backup | sed "s/}/,\"smartOk\":$(smart "$backup_dev")}/"),
+"lastSnapshot":{"name":"${last_snap}","ok":$snap_ok},
+"lastBackup":{"at":$last_backup,"ok":$backup_ok},
+"sambaVersion":"$samba","sessions":$sessions}
+JSON
