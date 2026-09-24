@@ -29,7 +29,7 @@ for a in "$@"; do
   esac
 done
 
-in_group() { samba-tool group listmembers "$1" 2>/dev/null | grep -qx "$2"; }
+in_group() { samba-tool group listmembers "$1" 2>/dev/null | grep -qxF -- "$2"; }
 
 # Ціль ніколи не може бути адміном
 if in_group "$ADMIN_GROUP" "$login"; then die "refused: target is in $ADMIN_GROUP"; fi
@@ -46,7 +46,7 @@ else
   fi
 fi
 
-read_password() { IFS= read -r pw; [ -n "$pw" ] || die "empty password"; }
+read_password() { pw=""; IFS= read -r pw || true; [ -n "$pw" ] || die "empty password"; }
 
 case "$op" in
   create)
