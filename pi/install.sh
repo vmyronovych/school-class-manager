@@ -19,6 +19,20 @@ systemctl enable --now nftables && systemctl reload nftables
 install -m 644 "$here"/scm.service "$here"/scm-update.service /etc/systemd/system/
 systemctl daemon-reload
 
+# Сервісний обліковий запис для читання каталогу: звичайний доменний користувач без груп.
+if [ ! -f /etc/scm/ldap.secret ]; then
+  pw=$(openssl rand -base64 36 | tr -d '\n')
+  if samba-tool user show svc-scm >/dev/null 2>&1; then
+    samba-tool user setpassword svc-scm --newpassword="$pw" >/dev/null
+  else
+    samba-tool user create svc-scm "$pw" --description="School Class Manager: читання каталогу" >/dev/null
+  fi
+  samba-tool user setexpiry svc-scm --noexpiry >/dev/null
+  (umask 077; printf '%s' "$pw" > /etc/scm/ldap.secret); unset pw
+  chown scm:scm /etc/scm/ldap.secret; chmod 600 /etc/scm/ldap.secret
+  echo ">> svc-scm створено, пароль у /etc/scm/ldap.secret"
+fi
+
 if [ ! -f /etc/scm/tls.pfx ]; then
   echo ">> TLS: запустіть pi/tls/make-ca.sh (один раз) і pi/tls/issue-cert.sh dc1.ad.school.lan 192.168.1.2"
 fi
@@ -26,7 +40,8 @@ if [ ! -f /etc/scm/appsettings.Production.json ]; then
   cat > /etc/scm/appsettings.Production.json <<JSON
 {
   "Domain": { "Realm": "ad.school.lan", "BaseDn": "DC=ad,DC=school,DC=lan", "StudentsOu": "OU=Uchni",
-              "TeacherGroup": "vchyteli", "AdminGroup": "Domain Admins", "LdapUrl": "ldapi:///" },
+              "TeacherGroup": "vchyteli", "AdminGroup": "Domain Admins", "LdapUrl": "ldap://127.0.0.1",
+              "BindUser": "svc-scm@ad.school.lan", "BindPasswordFile": "/etc/scm/ldap.secret" },
   "Paths": { "Home": "/srv/data/home", "Class": "/srv/data/class", "Snapshots": ".snapshots", "Db": "/var/lib/scm/scm.db" },
   "Tls": { "PfxPath": "/etc/scm/tls.pfx", "PfxPassword": "" },
   "PasswordPolicy": { "Syllables": 2, "AppendDigit": true }
