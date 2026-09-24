@@ -58,7 +58,7 @@ public class SudoRunnerTests
     {
         var sudo = new SudoRunner(Substitute.For<IProcessRunner>());
 
-        var act = () => sudo.RunAsync(SudoProgram.ScmUser, ["unlock", "4a.x\0--teacher"], CancellationToken.None);
+        var act = () => sudo.RunAsync(SudoProgram.ScmUser, ["unlock", "ivanenko.petro.2011\0--teacher"], CancellationToken.None);
 
         await act.Should().ThrowAsync<ArgumentException>();
     }

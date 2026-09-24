@@ -2,11 +2,11 @@
 
 2026-09-24 · Viktor
 
-> Зміни, ухвалені в плані застосунку (`docs/plan.md`, розділ «Розгортання на Pi → Що змінюється в інструкції впровадження»), мають пріоритет над цим документом: `submit\<login>\` — підпапка на учня; Trusted Root CA і ярлик «Роздатки» у GPO; `backup.sh` копіює `/var/lib/scm`.
+> Зміни, ухвалені в плані застосунку (`docs/plan.md`, розділ «Розгортання на Pi → Що змінюється в інструкції впровадження»), уже внесено в цей документ: `submit\<login>\` — підпапка на учня; Trusted Root CA, ярлик «Роздатки» і диск `H:` у GPO; обов'язковий профіль учнів; `backup.sh` копіює `/var/lib/scm`. Якщо щось розходиться — пріоритет у плану, а розбіжність виправити тут.
 
 ## Архітектура і передумови
 
-Результат: кожен учень входить у Windows під своїм логіном на будь-якому ПК класу; його «Робочий стіл» і «Документи» лежать на Raspberry Pi; на самому ПК він нічого змінити не може. Оцінка трудомісткості — 5 робочих днів, з них 2 дні на еталонний ПК і політики.
+Результат: кожен учень входить у Windows під своїм логіном на будь-якому ПК класу; його «Робочий стіл», «Документи» і «Зображення» лежать на Raspberry Pi, а вся його папка видна як диск `H:`; вигляд Windows однаковий для всіх учнів (обов'язковий профіль), тож на ПК не накопичуються сотні локальних профілів; на самому ПК учень нічого змінити не може. Оцінка трудомісткості — 5 робочих днів, з них 2 дні на еталонний ПК і політики.
 
 ```mermaid
 flowchart LR
@@ -42,8 +42,9 @@ flowchart LR
 | NetBIOS-ім'я | `SCHOOL` | що бачать учні у вікні входу |
 | Ім'я Pi | `dc1` → `dc1.ad.school.lan` | статична IP, напр. `192.168.1.2` |
 | Імена ПК | `KAB-01` … `KAB-15` | наліпка на корпусі з тим самим номером |
-| Логіни учнів | `4a.prizvyshche` | латиниця, клас у логіні — видно, хто де |
-| Групи | `uchni`, `uchni-3a`, `uchni-4a`, `vchyteli` | права — тільки по групах |
+| Логіни учнів | `prizvyshche.imia.RRRR` (`ivanenko.petro.2011`, RRRR — рік народження) | один логін на все навчання; латиниця за [КМУ №55](https://zakon.rada.gov.ua/laws/show/55-2010-%D0%BF); не довше 20 символів — інакше ім'я скорочується до ініціала (`kovalenko.a.2011`); збіг вирішує вчитель вручну |
+| Класи | код `<рік>-<клас>`, напр. `2025-4a` (рік — початок навчального року 2025/26) | клас — лише група; наступного року той самий учень іде в `2026-5a`, а старі групи й папки лишаються історією |
+| Групи | `uchni`, `uchni-2025-3a`, `uchni-2025-4a`, …, `vchyteli` | права — тільки по групах; поточний клас учня = його група з найновішим роком |
 | OU | `Uchni`, `Vchyteli`, `Klas-PC` | політики вішаємо на OU, не на домен |
 
 - [ ] Перевірити редакцію Windows на кожному ПК: `winver` або `Get-ComputerInfo | select WindowsProductName`
@@ -153,14 +154,16 @@ flowchart LR
     `sudo systemctl restart samba-ad-dc`, потім `sudo samba-tool testparm`.
 8. **Резервна копія «чистого» домену** — до того, як щось зламали:
     ```bash
-    sudo samba-tool domain backup offline --targetdir=/srv/data/ad-backup
+    sudo mkdir -p /srv/data/ad-backup-initial
+    sudo samba-tool domain backup offline --targetdir=/srv/data/ad-backup-initial
     ```
+    Окремою папкою: `/srv/data/ad-backup` щонеділі очищає `backup.sh` (Етап 4).
 
 DHCP на роутері: виставити DNS-сервер = `192.168.1.2`, домен = `ad.school.lan`. Якщо роутер не дає змінити DNS-опцію — вимкнути на ньому DHCP і підняти `isc-dhcp-server` на Pi (10 хвилин, окрема інструкція за потреби). Без DNS через Pi жоден ПК у домен не зайде.
 
 ## Етап 3. Файлові шари й права (½ дня)
 
-На виході: три шари на Pi; учень має RW лише у власній папці `home`, RO у `handouts`, RW лише у своїй підпапці `submit\<login>\`; вчитель бачить усе.
+На виході: дві шари на Pi (`home`, `class`); учень має RW лише у власній папці `home`, RO у `handouts`, RW лише у своїй підпапці `submit\<login>\`; вчитель бачить усе.
 
 Права на файли задаються **з Windows** (вкладка «Безпека» під `SCHOOL\Administrator`), а не `chmod`/`setfacl` — так ACL збігаються з тим, що очікує Folder Redirection, і їх видно у звичному інтерфейсі. Тому шари створюються тут, а права виставляються після Етапу 5 (коли є Windows-машина в домені).
 
@@ -180,6 +183,7 @@ DHCP на роутері: виставити DNS-сервер = `192.168.1.2`, �
         path = /srv/data/class
         read only = no
         browseable = yes
+        hide unreadable = yes
         vfs objects = dfs_samba4 acl_xattr shadow_copy2
         shadow:snapdir = .snapshots
         shadow:sort = desc
@@ -188,7 +192,7 @@ DHCP на роутері: виставити DNS-сервер = `192.168.1.2`, �
     `sudo samba-tool testparm && sudo systemctl restart samba-ad-dc`.
 2. **Структура папок:**
     ```bash
-    sudo mkdir -p /srv/data/class/{3a,4a}/{handouts,submit}
+    sudo mkdir -p /srv/data/class/{2025-3a,2025-4a}/{handouts,submit}
     sudo chown -R root:root /srv/data/home /srv/data/class
     sudo chmod 755 /srv/data/home /srv/data/class
     ```
@@ -200,20 +204,20 @@ DHCP на роутері: виставити DNS-сервер = `192.168.1.2`, �
 | `home` | `vchyteli` | Повний доступ | ця папка, підпапки, файли |
 | `home` | `uchni` | Перегляд списку + Створення папок | тільки ця папка |
 | `home` | `CREATOR OWNER` | Повний доступ | тільки підпапки й файли |
-| `class\<клас>\handouts` | `vchyteli` | Зміна | ця папка, підпапки, файли |
-| `class\<клас>\handouts` | `uchni-<клас>` | Читання й виконання | ця папка, підпапки, файли |
-| `class\<клас>\submit` | `vchyteli` | Повний доступ | ця папка, підпапки, файли |
-| `class\<клас>\submit` | `uchni-<клас>` | Перегляд списку | тільки ця папка |
-| `class\<клас>\submit\<login>` | `<login>` | Зміна | ця папка, підпапки, файли (створює logon-скрипт, Етап 8) |
+| `class\<рік>-<клас>\handouts` | `vchyteli` | Зміна | ця папка, підпапки, файли |
+| `class\<рік>-<клас>\handouts` | `uchni-<рік>-<клас>` | Читання й виконання | ця папка, підпапки, файли |
+| `class\<рік>-<клас>\submit` | `vchyteli` | Повний доступ | ця папка, підпапки, файли |
+| `class\<рік>-<клас>\submit` | `uchni-<рік>-<клас>` | Перегляд списку + Створення папок | тільки ця папка |
+| `class\<рік>-<клас>\submit` | `CREATOR OWNER` | Зміна | тільки підпапки й файли |
 
 Логіка `home`: учень може створити папку в корені (це робить Folder Redirection при першому вході), стає її власником і через `CREATOR OWNER` отримує повний доступ лише до неї. Чужі папки він не бачить навіть у списку (`hide unreadable = yes`).
 
-Логіка `submit`: підпапку `submit\<login>` створює GPO logon-скрипт при першому вході й дає учню права на неї; учень бачить тільки свою. Вчитель бачить усе. Застосунок School Class Manager визначає «хто не здав» за назвами підпапок.
+Логіка `submit`: підпапку `submit\<login>` створює GPO logon-скрипт (Етап 8.1) при першому вході; учень стає її власником і через `CREATOR OWNER` має «Зміна» лише в ній; чужих підпапок не бачить (`hide unreadable = yes`). Вчитель бачить усе. Застосунок School Class Manager визначає «хто не здав» за назвами підпапок.
 
 4. **Перевірка з Linux** (після створення тестового учня в Етапі 6):
     ```bash
-    smbclient //dc1/home -U '4a.test' -c 'mkdir 4a.test; cd 4a.test; put /etc/hostname'
-    smbclient //dc1/class -U '4a.test' -c 'cd 4a/handouts; put /etc/hostname'   # має відмовити
+    smbclient //dc1/home -U 'test.uchen.2015' -c 'mkdir test.uchen.2015; cd test.uchen.2015; put /etc/hostname'
+    smbclient //dc1/class -U 'test.uchen.2015' -c 'cd 2025-4a/handouts; put /etc/hostname'   # має відмовити
     ```
 
 ## Етап 4. Снапшоти й резервне копіювання (2 години)
@@ -285,6 +289,8 @@ DHCP на роутері: виставити DNS-сервер = `192.168.1.2`, �
     Завантажити [Chrome Enterprise policy templates](https://chromeenterprise.google/browser/download/), розпакувати, скопіювати `chrome.admx` у `$dst` і `uk-UA\chrome.adml` (або `en-US`) у відповідну підпапку.
 7. **Якщо GPMC свариться на права SYSVOL** (типово для Samba після перших редагувань): на Pi `sudo samba-tool ntacl sysvolreset`.
 
+Сервісний обліковий запис `svc-scm` (School Class Manager читає ним каталог) створює `pi/install.sh` — вручну нічого робити не треба; він без груп і прав на запис, вхід на ПК класу йому заборонено в 8.3.
+
 Окремий адмінський акаунт для себе: `samba-tool user create viktor.admin`, `samba-tool group addmembers 'Domain Admins' viktor.admin`. `Administrator` — лише для аварій, пароль у конверті.
 
 ## Етап 6. OU, групи, політика паролів, учні з CSV (2 години)
@@ -301,8 +307,8 @@ DHCP на роутері: виставити DNS-сервер = `192.168.1.2`, �
     ```
 2. **Групи:**
     ```bash
-    for g in uchni uchni-3a uchni-4a vchyteli; do samba-tool group add $g; done
-    samba-tool group addmembers uchni uchni-3a,uchni-4a   # вкладеність: 3а і 4а входять в uchni
+    for g in uchni uchni-2025-3a uchni-2025-4a vchyteli; do samba-tool group add $g; done
+    samba-tool group addmembers uchni uchni-2025-3a,uchni-2025-4a   # вкладеність: усі групи класів входять в uchni
     ```
 3. **Політика паролів.** Для 3–4 класу складність і ротація — шкода без користі:
     ```bash
@@ -312,34 +318,40 @@ DHCP на роутері: виставити DNS-сервер = `192.168.1.2`, �
     ```
 4. **CSV** `uchni.csv` — готуєте на Mac із класного журналу, формат `логін,пароль,клас,Прізвище,Ім'я`:
     ```csv
-    4a.ivanenko,kit1,4a,Іваненко,Петро
-    4a.kovalenko,pes2,4a,Коваленко,Марія
-    3a.shevchenko,rak3,3a,Шевченко,Олег
+    ivanenko.petro.2011,kit1,2025-4a,Іваненко,Петро
+    kovalenko.a.2011,pes2,2025-4a,Коваленко,Анастасія
+    shevchenko.oleh.2012,rak3,2025-3a,Шевченко,Олег
     ```
-    Пароль — коротке слово + цифра; його ж друкуєте на картці. Логін — латиниця без діакритики, транслітерація за [постановою КМУ №55](https://zakon.rada.gov.ua/laws/show/55-2010-%D0%BF).
+    Пароль — коротке слово + цифра; його ж друкуєте на картці. Логін — `прізвище.ім'я.рік народження` латиницею за [постановою КМУ №55](https://zakon.rada.gov.ua/laws/show/55-2010-%D0%BF), малими літерами; довший за 20 символів — ім'я до ініціала; якщо такий логін уже є — вибрати вручну в межах 20 символів (напр. з ініціалом по батькові: `ivanenko.p.o.2011`). Клас — код поточного навчального року (`2025-4a`).
 5. **Скрипт створення** `/usr/local/sbin/add-uchni.sh` (готовий у `pi/sbin/add-uchni.sh`):
     ```bash
     #!/bin/bash
     # використання: add-uchni.sh uchni.csv
+    # Обов'язковий профіль (Етап 9, п. 9) — лише коли він уже існує.
+    opt=()
+    [ -d /var/lib/samba/sysvol/ad.school.lan/scripts/profiles/uchni.V6 ] \
+      && opt=(--profile-path='\\dc1\netlogon\profiles\uchni')
     while IFS=, read -r login pass klas prizv imya; do
       [ -z "$login" ] && continue
       samba-tool user create "$login" "$pass" \
         --given-name="$imya" --surname="$prizv" \
-        --description="$klas" --userou='OU=Uchni' \
+        --userou='OU=Uchni' "${opt[@]}" \
       && samba-tool group addmembers "uchni-$klas" "$login" \
       && echo "OK $login"
     done < "$1"
     ```
     Запуск: `scp uchni.csv admin@dc1:` → `sudo add-uchni.sh uchni.csv`. Помилка на одному рядку не зупиняє решту.
+
+    `--profile-path` скрипт додає сам, щойно на Pi є обов'язковий профіль (Етап 9, п. 9). Раніше його ставити не можна: Windows шукатиме профіль за неіснуючим шляхом і на кожному вході/виході видаватиме помилку синхронізації. Учням, створеним до Етапу 9, атрибут додається одним проходом там само. Вчителям `--profile-path` не задається ніколи.
 6. **Вчителі** — вручну, з нормальним паролем:
     ```bash
     samba-tool user create v.prizvyshche --userou='OU=Vchyteli' --given-name=... --surname=...
     samba-tool group addmembers vchyteli v.prizvyshche
     ```
-7. **Тестовий учень** для перевірок: `samba-tool user create 4a.test test1 --userou='OU=Uchni'`, додати в `uchni-4a`. Після пілота видалити.
-8. **Перевірка:** `samba-tool user list | sort`, `samba-tool group listmembers uchni-4a`, з Windows — `dsa.msc` → OU Uchni.
+7. **Тестовий учень** для перевірок: `samba-tool user create test.uchen.2015 test1 --userou='OU=Uchni'`, додати в `uchni-2025-4a`. Після пілота видалити.
+8. **Перевірка:** `samba-tool user list | sort`, `samba-tool group listmembers uchni-2025-4a`, з Windows — `dsa.msc` → OU Uchni.
 
-Картка учня (роздрукувати, заламінувати, тримати у вчителя): три рядки — ПК: будь-який · Логін: `4a.ivanenko` · Пароль: `kit1`. У вікні входу Windows учень вводить тільки логін; `SCHOOL\` підставляється сам, бо ПК у домені.
+Картка учня (роздрукувати, заламінувати, тримати у вчителя): три рядки — ПК: будь-який · Логін: `ivanenko.petro.2011` · Пароль: `kit1`. У вікні входу Windows учень вводить тільки логін; `SCHOOL\` підставляється сам, бо ПК у домені.
 
 ## Етап 7. Еталонний клієнт Windows Pro (1 день)
 
@@ -361,8 +373,9 @@ DHCP на роутері: виставити DNS-сервер = `192.168.1.2`, �
     OneDrive: `winget uninstall Microsoft.OneDrive`. Це важливо — інакше OneDrive перехопить «Документи» замість Folder Redirection.
 6. **Системні налаштування:** Живлення — ніколи не спати від мережі, вимкнути Fast Startup (через нього GPO при завантаженні не оновлюються); екран блокування без реклами; вимкнути «Поради» у Параметрах.
 7. **Ввести в домен** (якщо це не той самий ПК, що з Етапу 5). Перемістити об'єкт комп'ютера в OU `Klas-PC` — з Pi: `sudo samba-tool computer move KAB-01 'OU=Klas-PC'`.
-8. **Перевірка під тестовим учнем.** Вийти, увійти як `4a.test`. Має пройти вхід, з'явитись профіль. Поки без GPO — обмежень ще немає, це нормально.
-9. **Знімок стану.** Після Етапу 8 (GPO перевірені) — це і є момент для sysprep.
+8. **Перевірка під тестовим учнем.** Вийти, увійти як `test.uchen.2015`. Має пройти вхід, з'явитись профіль. Поки без GPO — обмежень ще немає, це нормально.
+9. **Шаблон профілю учня — під `kabadmin`.** З цього профілю sysprep (`CopyProfile`, Етап 9) зробить профіль за замовчуванням, а з нього — обов'язковий профіль учнів. Тож усе, що учень має бачити при кожному вході, налаштувати тут: один раз відкрити LibreOffice / Office, Scratch та інші програми уроку й закрити майстри першого запуску й «Що нового»; мова й розкладка клавіатури. Робочий стіл `kabadmin` залишити порожнім, нічого особистого в профілі не зберігати — це скопіюється всім. Шпалери й закріплене в «Пуск», якщо треба однаковими для всіх, краще задати GPO (User Configuration → Admin Templates → Desktop → Desktop Wallpaper; для «Пуск» — Start Layout), а не тут.
+10. **Знімок стану.** Після Етапу 8 (GPO перевірені) — це і є момент для sysprep.
 
 Тестувати завжди під учнівським акаунтом. Половина «у мене все працює» — це «у мене все працює під адміном».
 
@@ -372,9 +385,9 @@ DHCP на роутері: виставити DNS-сервер = `192.168.1.2`, �
 
 | GPO | Куди прив'язати | Що всередині |
 | --- | --- | --- |
-| `Uchni – Folder Redirection` | OU `Uchni` | Desktop, Documents, Pictures → `\\dc1\home`; logon-скрипт для `submit`; ярлик «Роздатки» |
+| `Uchni – Folder Redirection` | OU `Uchni` | Desktop, Documents, Pictures → `\\dc1\home`; диск `H:`; logon-скрипт для `submit`; ярлик «Роздатки» |
 | `Uchni – Obmezhennya` | OU `Uchni` | заборони в User Configuration |
-| `Klas-PC` | OU `Klas-PC` | Offline Files off, USB, профілі, вхід, Chrome, Trusted Root CA |
+| `Klas-PC` | OU `Klas-PC` | Offline Files off, USB, профілі (обов'язковий профіль учнів), вхід, Chrome, Trusted Root CA |
 
 Шляхи нижче — англійські назви вузлів, як у GPMC; українська локалізація перекладає їх по-різному.
 
@@ -387,21 +400,42 @@ User Configuration → Policies → Windows Settings → Folder Redirection. Д�
 - Root Path: `\\dc1\home`
 - Вкладка Settings: **зняти** `Grant the user exclusive rights` (інакше вчитель не зайде), залишити `Move the contents to the new location`, Policy Removal: `Leave the folder in the new location`
 
-Downloads, Music, Videos — не перенаправляти: сміття, що забиває HDD.
+Downloads, Music, Videos — не перенаправляти: сміття, що забиває HDD. З обов'язковим профілем (Етап 9, п. 9) усе, що учень зберіг **поза** Робочим столом, Документами й Зображеннями, зникає після виходу — сказати про це вчителю; завантаження Chrome уже йдуть у Документи (8.4).
+
+**Диск `H:`** (User Configuration → Preferences → Windows Settings → Drive Maps → New → Mapped Drive):
+
+- Action: `Update`
+- Location: `\\dc1\home\%LogonUser%`
+- Reconnect: зняти; Label as: `Моя папка`
+- Drive Letter: `Use: H`; Hide/Show this drive: `Show this drive`
+
+Папку `\\dc1\home\<login>` створює Folder Redirection на першому вході; Drive Maps зазвичай обробляється після нього, але це треба перевірити саме на першому вході нового учня (8.5): якщо `H:` з'являється лише з другого входу — на Pi створити папку заздалегідь або перевірити, що увімкнено «Always wait for the network» (8.3).
 
 **Logon-скрипт для `submit`** (User Configuration → Policies → Windows Settings → Scripts → Logon; файл `pi/gpo/submit-logon.ps1`, покласти в SYSVOL):
 
 ```powershell
-# створює \\dc1\class\<клас>\submit\<login> при першому вході
+# GPO logon-скрипт (User Configuration → Scripts → Logon).
+# Поточний клас = група uchni-<рік>-<клас> з найновішим роком. Створює
+# \\dc1\class\<рік>-<клас>\submit\<login> і ярлик «Роздатки» на поточний клас.
 $login = $env:USERNAME
-if ($login -notmatch '^(\d{1,2}[a-z])\.') { exit }
-$cls = $Matches[1]
+$cls = [Security.Principal.WindowsIdentity]::GetCurrent().Groups |
+  ForEach-Object {
+    try { $name = $_.Translate([Security.Principal.NTAccount]).Value } catch { return }
+    if ($name -match '\\uchni-(\d{4}-\d{1,2}[a-z])$') { $Matches[1] }
+  } | Sort-Object -Descending | Select-Object -First 1
+if (-not $cls) { exit }
 $dir = "\\dc1\class\$cls\submit\$login"
 if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }
+$lnk = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Роздатки.lnk'
+$s = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk)
+if ($s.TargetPath -ne "\\dc1\class\$cls\handouts") {
+  $s.TargetPath = "\\dc1\class\$cls\handouts"
+  $s.Save()
+}
 ```
-Права на створену папку учень отримує через `CREATOR OWNER` на корені `submit` (Етап 3, ACL: `CREATOR OWNER` — Зміна, тільки підпапки й файли).
+Файл зберігати в UTF-8 **з BOM** (так він лежить у репозиторії): Windows PowerShell 5.1 без BOM читає скрипт як ANSI і псує кирилицю в назві ярлика. Права на створену папку учень отримує через `CREATOR OWNER` на корені `submit` (Етап 3). Ярлик лягає на перенаправлений Робочий стіл, тобто на Pi, і переживає вихід з обов'язковим профілем; з новим навчальним роком скрипт сам переводить його на новий клас. Код класу (`2025-4a`) лексикографічно впорядкований за роком, тому `Sort-Object` бере поточний.
 
-**Ярлик «Роздатки»** (User Configuration → Preferences → Windows Settings → Shortcuts): Name `Роздатки`, Location `Desktop`, Target path `\\dc1\class\%ClassCode%\handouts` — по одному ярлику на клас з Item-level targeting «Security Group = uchni-<клас>», або той самий PowerShell-скрипт створює `.lnk` через `WScript.Shell`.
+**Ярлик «Роздатки» без скрипта** (альтернатива): User Configuration → Preferences → Windows Settings → Shortcuts, Name `Роздатки`, Location `Desktop`, Target path `\\dc1\class\<рік>-<клас>\handouts` — по одному ярлику на клас з Item-level targeting «Security Group = uchni-<рік>-<клас>», і так щороку заново. Змінної `%ClassCode%` у Windows немає.
 
 ### 8.2 `Uchni – Obmezhennya`
 
@@ -429,10 +463,15 @@ Computer Configuration → Policies:
 | Шлях | Політика | Значення |
 | --- | --- | --- |
 | Admin Templates → Network → Offline Files | Allow or Disallow use of the Offline Files feature | **Disabled** |
-| Admin Templates → System → User Profiles | Delete user profiles older than a specified number of days on system restart | Enabled, 30 |
+| Admin Templates → System → User Profiles | Delete cached copies of roaming profiles | Enabled — локальна копія обов'язкового профілю учня видаляється при виході |
+| Admin Templates → System → User Profiles | Delete user profiles older than a specified number of days on system restart | Enabled, 30 — страховка для профілів вчителів і залишків |
+| Admin Templates → Windows Components → App Package Deployment | Allow deployment operations in special profiles | Enabled — без цього в обов'язковому профілі не працюють «Пуск» і вбудовані застосунки |
+| Admin Templates → System → Logon | Always wait for the network at computer startup and logon | Enabled — Folder Redirection, `H:` і профіль застосовуються до появи Робочого столу |
+| Admin Templates → System → Group Policy | Configure Logon Script Delay | Enabled, 0 хв — інакше Windows запускає logon-скрипт (`submit`, «Роздатки») через 5 хв після входу |
 | Admin Templates → System → Removable Storage Access | All Removable Storage classes: Deny all access | Enabled (якщо флешки не потрібні на уроці) |
 | Admin Templates → Windows Components → AutoPlay Policies | Turn off AutoPlay | Enabled, All drives |
 | Windows Settings → Security Settings → Local Policies → Security Options | Interactive logon: Don't display last signed-in | Enabled |
+| Windows Settings → Security Settings → Local Policies → User Rights Assignment | Deny log on locally; Deny log on through Remote Desktop Services | `SCHOOL\svc-scm` — сервісний обліковий запис School Class Manager не входить на ПК |
 | Windows Settings → Security Settings → Local Policies → Security Options | Interactive logon: Number of previous logons to cache | 10 (типово) |
 | Windows Settings → Security Settings → Local Policies → Security Options | Interactive logon: Machine inactivity limit | 300 с (блокування екрана) |
 | Windows Settings → Security Settings → Public Key Policies → Trusted Root Certification Authorities | Import | корінь «SCHOOL Class CA» (`pi/tls`, для HTTPS School Class Manager) |
@@ -452,16 +491,16 @@ Offline Files вимкнути обов'язково. Інакше при нед
 | DownloadDirectory | `${documents}\Downloads` — інакше падає в локальний профіль |
 | Managed Bookmarks (для групи `vchyteli`, окремий GPO на OU `Vchyteli`) | `https://dc1.ad.school.lan` — School Class Manager |
 
-Профіль Chrome лежить у локальному `AppData`, він не перенаправляється — це нормально: закладки не переїжджають між ПК, зате Pi не тягне кеш.
+Профіль Chrome лежить у локальному `AppData`, він не перенаправляється — це нормально: закладки не переїжджають між ПК, зате Pi не тягне кеш. В учнів з обов'язковим профілем він ще й зникає після виходу.
 
 ### 8.5 Застосувати й перевірити
 
 1. На `KAB-01` під адміном: `gpupdate /force`, перезавантажити.
-2. Увійти як `4a.test`. `gpresult /r` — у списку мають бути всі три GPO.
-3. Перевірити: Провідник не показує `C:`; `Win+R` не працює; Документи → Властивості → Розташування = `\\dc1\home\4a.test\Documents`; створити файл на Робочому столі — він з'явився в `/srv/data/home/4a.test/Desktop` на Pi; на Pi є `/srv/data/class/4a/submit/4a.test`; на Робочому столі є ярлик «Роздатки».
+2. Увійти як `test.uchen.2015`. `gpresult /r` — у списку мають бути всі три GPO.
+3. Перевірити: Провідник не показує `C:`; `Win+R` не працює; Документи → Властивості → Розташування = `\\dc1\home\test.uchen.2015\Documents`; створити файл на Робочому столі — він з'явився в `/srv/data/home/test.uchen.2015/Desktop` на Pi; на Pi є `/srv/data/class/2025-4a/submit/test.uchen.2015`; на Робочому столі є ярлик «Роздатки»; у «Цей ПК» є диск `H:` («Моя папка») з папками Desktop, Documents, Pictures.
 4. Якщо Folder Redirection не спрацював: Event Viewer → Applications and Services → Microsoft → Windows → Folder Redirection — там точна причина (майже завжди ACL на корені `home`).
 
-Після успіху — Етап 7 п. 9: це стан для sysprep.
+Після успіху — Етап 7 п. 10: це стан для sysprep.
 
 ## Етап 9. Тиражування (1 день на 15 ПК)
 
@@ -469,10 +508,16 @@ Offline Files вимкнути обов'язково. Інакше при нед
 
 Sysprep потрібен: клонувати без нього — дублікати SID і провал join на другому ПК з тим самим ім'ям. Sysprep сам виведе машину з домену — після клонування кожен ПК вводимо заново.
 
-1. **Файл відповідей** `C:\unattend.xml` на еталоні — щоб не клацати OOBE 15 разів (замінити пароль і назви):
+1. **Файл відповідей** `C:\unattend.xml` на еталоні — щоб не клацати OOBE 15 разів (замінити пароль і назви). `CopyProfile` робить профіль `kabadmin` (Етап 7, п. 9) профілем за замовчуванням на кожному клоні:
     ```xml
     <?xml version="1.0" encoding="utf-8"?>
     <unattend xmlns="urn:schemas-microsoft-com:unattend">
+      <settings pass="specialize">
+        <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64"
+          publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+          <CopyProfile>true</CopyProfile>
+        </component>
+      </settings>
       <settings pass="oobeSystem">
         <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64"
           publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
@@ -515,7 +560,26 @@ Sysprep потрібен: клонувати без нього — дублік�
     for i in $(seq -w 2 15); do sudo samba-tool computer move KAB-$i 'OU=Klas-PC'; done
     ```
 7. **Наліпка** з іменем ПК на корпус і монітор. Без цього «у мене не працює» не локалізується.
-8. **Перевірка кожного ПК:** вхід `4a.test` → файл на Робочому столі → видно з іншого ПК. 2 хв на машину.
+8. **Перевірка кожного ПК:** вхід `test.uchen.2015` → файл на Робочому столі → видно з іншого ПК. 2 хв на машину.
+9. **Обов'язковий профіль учнів** (один раз, на будь-якому клоні, напр. `KAB-02`, під `SCHOOL\Administrator`). Навіщо: 400 учнів на 10 ПК — кожен ПК інакше збирає сотні локальних профілів по 100+ MB, а кожен перший вхід на новому ПК триває до 40 с. Обов'язковий профіль однаковий для всіх, береться з Pi при вході й видаляється з ПК при виході; особисте учня — Робочий стіл, Документи, Зображення, `H:` — на Pi через Folder Redirection. Процедура — за [Microsoft: Create mandatory user profiles](https://learn.microsoft.com/windows/client-management/client-tools/mandatory-user-profile):
+    1. Створити папку `\\dc1\netlogon\profiles`.
+    2. `sysdm.cpl` → Додатково → Профілі користувачів → **Default Profile** (профіль за замовчуванням) → **Copy To**: шлях `\\dc1\netlogon\profiles\uchni.V6`, «Permitted to use» → `Everyone`. Суфікс `.V6` обов'язковий для Windows 10 1607+ і Windows 11; в атрибуті `profilePath` учня (Етап 6) він **не** пишеться.
+    3. `regedit` → HKEY_USERS → File → Load Hive → `\\dc1\netlogon\profiles\uchni.V6\NTUSER.DAT`, ім'я будь-яке → Permissions → Advanced: `Administrators` — Full control, «Replace all child object permission entries» → OK → File → Unload Hive.
+    4. Перейменувати `NTUSER.DAT` → `NTUSER.MAN` у `\\dc1\netlogon\profiles\uchni.V6`.
+    5. Призначити профіль учням — атрибут `profilePath` усім в OU `Uchni` одним проходом (нових учнів `add-uchni.sh` відтепер створює з ним сам). Спершу перевірити на `test.uchen.2015`:
+        ```bash
+        SAM=/var/lib/samba/private/sam.ldb
+        sudo ldbsearch -H $SAM -b 'OU=Uchni,DC=ad,DC=school,DC=lan' '(objectClass=user)' objectGUID \
+          | awk '/^objectGUID: /{print $2}' \
+          | while read -r g; do
+              printf 'dn: <GUID=%s>\nchangetype: modify\nreplace: profilePath\nprofilePath: \\\\dc1\\netlogon\\profiles\\uchni\n\n' "$g"
+            done \
+          | sudo ldbmodify -H $SAM
+        samba-tool user show test.uchen.2015 --attributes=profilePath   # profilePath: \\dc1\netlogon\profiles\uchni
+        ```
+    6. Перевірити: увійти як `test.uchen.2015` на двох різних ПК — вигляд однаковий, файли на Робочому столі свої; закріпити програму на панелі завдань, вийти, увійти знову — закріплення зникло; після виходу в `C:\Users` немає папки `test.uchen.2015`.
+
+    Папка лежить у SYSVOL і потрапляє в щотижневий бекап AD (Етап 4). Змінити вигляд для всіх — повторити п. 2–4 з оновленого еталона або задати GPO; `samba-tool ntacl sysvolreset` права на профіль не ламає (читання для Authenticated Users лишається).
 
 Образ зберегти на HDD2 (`/srv/backup/images/`) і на окремій флешці. Зламаний ПК — це 10 хвилин Clonezilla + 5 хвилин join, а не година діагностики.
 
@@ -526,11 +590,13 @@ Sysprep потрібен: клонувати без нього — дублік�
 ### Приймальний чекліст (до першого уроку)
 
 - [ ] Учень входить на `KAB-03`, створює файл на Робочому столі, виходить, входить на `KAB-07` — файл на місці
+- [ ] На будь-якому ПК учень бачить диск `H:` зі своїми Desktop, Documents, Pictures і не бачить чужих
+- [ ] Після виходу учня в `C:\Users` на ПК не лишається його профілю; вигляд Windows у всіх учнів однаковий
 - [ ] Учень не бачить `C:` у Провіднику, не запускає `cmd`, `regedit`, Панель керування
 - [ ] Учень не може зайти в `\\dc1\home\<інший учень>` — «немає доступу», папки не видно в списку
-- [ ] Учень читає `\\dc1\class\4a\handouts` через ярлик «Роздатки», не може туди записати
+- [ ] Учень читає `\\dc1\class\2025-4a\handouts` через ярлик «Роздатки», не може туди записати
 - [ ] Учень кладе файл у `submit\<login>`, бачить лише свою підпапку; вчитель бачить усі
-- [ ] Вчитель під своїм акаунтом відкриває `\\dc1\home\4a.test\Documents`
+- [ ] Вчитель під своїм акаунтом відкриває `\\dc1\home\test.uchen.2015\Documents`
 - [ ] «Попередні версії» на папці учня показують снапшот
 - [ ] Пароль скидається з телефону по SSH за 30 секунд (або з School Class Manager)
 - [ ] Два учні одночасно з одним логіном на двох ПК — працює (Windows це дозволяє; для 3 класу зручно, коли забув картку)
@@ -541,16 +607,16 @@ Sysprep потрібен: клонувати без нього — дублік�
 
 ### Пілотний урок
 
-1. Роздати картки з логінами, 5 хвилин на перший вхід — профіль створюється довше за наступні входи.
+1. Роздати картки з логінами, 5 хвилин на вхід. З обов'язковим профілем кожен вхід схожий на перший — заміряти, скільки він триває насправді, і записати в «Ознаки».
 2. Завдання уроку: зберегти файл у «Документи» і покласти копію в «Здати роботу» (`submit\<login>`).
-3. Після уроку на Pi: `ls /srv/data/home | wc -l` — кількість папок = кількість учнів, що входили; `ls /srv/data/class/4a/submit`.
+3. Після уроку на Pi: `ls /srv/data/home | wc -l` — кількість папок = кількість учнів, що входили; `ls /srv/data/class/2025-4a/submit`.
 4. Записати все, що зламалось або забрало час, — це правки в GPO/еталон **до** тиражу на другий клас.
 
 ### Ознаки, що система прийнята
 
 | Показник | Норма |
 | --- | --- |
-| Вхід учня в Windows | до 40 с при першому вході, до 15 с далі |
+| Вхід учня в Windows | до 40 с (обов'язковий профіль розгортається при кожному вході — цифру уточнити на пілоті) |
 | Збереження файлу 1 MB у «Документи» | миттєво |
 | `gpresult /r` під учнем | усі три GPO застосовані |
 | Навантаження Pi на уроці | `load average` < 2, RAM < 2 GB (`htop`) |
@@ -562,17 +628,21 @@ Sysprep потрібен: клонувати без нього — дублік�
 
 | Ситуація | Команда / дія |
 | --- | --- |
-| Учень забув пароль | `samba-tool user setpassword 4a.ivanenko --newpassword=kit1` |
+| Учень забув пароль | `samba-tool user setpassword ivanenko.petro.2011 --newpassword=kit1` |
 | Новий учень | додати рядок у CSV, `add-uchni.sh` з файлом із цим одним рядком |
-| Учень вибув | `samba-tool user disable 4a.ivanenko`; папку в `home` не чіпати до кінця року |
-| Учень заблокований (5 невірних паролів) | `samba-tool user unlock 4a.ivanenko` |
-| Учень видалив свою роботу | з Windows: ПКМ на папці → Попередні версії → потрібна година → Відновити. З Pi: `cp -a /srv/data/home/.snapshots/@GMT-…/4a.ivanenko/Documents/файл /srv/data/home/4a.ivanenko/Documents/` |
-| Роздати матеріали класу | покласти файли у `\\dc1\class\4a\handouts` під учительським акаунтом |
-| Зібрати роботи | `\\dc1\class\4a\submit\<login>` — підпапка на учня |
+| Учень вибув | `samba-tool user disable ivanenko.petro.2011`; папку в `home` не чіпати до кінця навчального року |
+| Учень заблокований (5 невірних паролів) | `samba-tool user unlock ivanenko.petro.2011` |
+| Учень видалив свою роботу | з Windows: ПКМ на папці → Попередні версії → потрібна година → Відновити. З Pi: `cp -a /srv/data/home/.snapshots/@GMT-…/ivanenko.petro.2011/Documents/файл /srv/data/home/ivanenko.petro.2011/Documents/` |
+| Роздати матеріали класу | покласти файли у `\\dc1\class\2025-4a\handouts` під учительським акаунтом |
+| Зібрати роботи | `\\dc1\class\2025-4a\submit\<login>` — підпапка на учня |
 | Хто зараз увійшов і звідки | `smbstatus` — активні сесії до шар з логіном та IP ПК |
 | ПК «дивно поводиться» | Clonezilla `restoredisk` з образу + join, 15 хв |
-| Новий навчальний рік | `samba-tool group add uchni-3b`; перенести членів: `samba-tool group removemembers`/`addmembers`; логіни з класом у назві не перейменовувати — простіше створити нові й вимкнути старі |
+| Новий клас | `samba-tool group add uchni-2025-3b`, `samba-tool group addmembers uchni uchni-2025-3b` (вкладеність — інакше не спрацюють права на `home`); `mkdir -p /srv/data/class/2025-3b/{handouts,submit}`; ACL для `class\2025-3b` — з Windows за таблицею Етапу 3 |
+| Новий навчальний рік | для кожного класу — «Новий клас» з новим роком (`2026-5a`) і зарахувати в нього весь попередній клас: `samba-tool group addmembers uchni-2026-5a $(samba-tool group listmembers uchni-2025-4a \| paste -sd,)`. Зі старих груп не виключати — історія й доступ до старих роздаток лишаються. Логіни й папки `home` не змінюються. Випускників — вимкнути |
+| Учень прийшов посеред року | створити (`add-uchni.sh`) і додати в групу поточного класу. Переведення учня між класами немає: помилку в класі виправляє адмін у `dsa.msc` |
 | Вільне місце | `df -h /srv/data`; `btrfs filesystem du -s /srv/data/home/*` — хто скільки займає |
+| Змінити вигляд Windows для всіх учнів | GPO (шпалери, «Пуск») або перезібрати обов'язковий профіль: Етап 9, п. 9 |
+| «Пуск» чи вбудовані застосунки не відкриваються в учня | перевірити `Allow deployment operations in special profiles` (8.3); після великого оновлення Windows — перезібрати профіль з оновленого еталона |
 | Оновлення Pi | раз на місяць, у вихідний: `apt update && apt full-upgrade`, `reboot`, перевірити `samba-tool domain level show` і вхід учня |
 | Оновлення Windows | самі, поза Active hours; раз на семестр оновити еталон і перезняти образ |
 | School Class Manager не відкривається, Samba працює | `journalctl -u scm -n 100`, `systemctl restart scm` |
@@ -587,7 +657,7 @@ Sysprep потрібен: клонувати без нього — дублік�
 
 ## Аварійні сценарії й ризики
 
-Головний ризик — Pi як єдина точка відмови. Учні, що вже входили на цей ПК, увійдуть з кешу, але без своїх папок. Решта нижче — за спаданням імовірності.
+Головний ризик — Pi як єдина точка відмови. З кешу на ПК увійдуть лише 10 останніх користувачів цього ПК (`Number of previous logons to cache`, 8.3) — з тимчасовим профілем і без своїх папок; решта учнів не увійде. Інші сценарії нижче — за спаданням імовірності.
 
 | Сценарій | Симптом | Дія | Час |
 | --- | --- | --- | --- |
@@ -609,9 +679,11 @@ Sysprep потрібен: клонувати без нього — дублік�
 | Sysprep відмовляється через Appx | середня | видалити пакет із логу, повторити; лічильник rearm — 8 спроб |
 | Старі HDD із bad-секторами | середня | `smartctl -t long` перед стартом; сумнівний диск — тільки під бекап |
 | Folder Redirection не спрацьовує через ACL | висока при першому налаштуванні | Event Viewer → Folder Redirection; звірити таблицю Етапу 3 |
+| Обов'язковий профіль ламає «Пуск» / застосунки після оновлення Windows | середня | політика `Allow deployment operations in special profiles`; перезібрати профіль з оновленого еталона; до того — тимчасово прибрати `profilePath` у тестового учня й порівняти |
+| Учні зберігають поза Робочим столом / Документами / Зображеннями і втрачають це після виходу | висока в перші тижні | пояснити вчителю; Chrome уже зберігає в Документи; диск `H:` як «єдине правильне місце» |
 | USB-бокс «відвалюється» під навантаженням | низька–середня | окреме живлення боксу, короткий кабель, `dmesg -w` під час пілоту |
 | Школа очікує доступ з дому «як у хмарі» | середня | не робити в цьому проєкті: це VPN і інший клас ризиків |
 
 ### Персональні дані
 
-У домені зберігати лише прізвище, ім'я, клас. Жодних дат народження, телефонів, батьків. Папки вибулих учнів видаляти в кінці навчального року; снапшоти самі зникають через 30 днів.
+У домені зберігати лише прізвище, ім'я, рік народження (він є частиною логіна, тож видимий усім, хто бачить логін) і класи. Жодних повних дат народження, телефонів, батьків. Папки вибулих учнів видаляти в кінці навчального року; снапшоти самі зникають через 30 днів.

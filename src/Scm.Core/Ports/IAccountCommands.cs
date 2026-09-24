@@ -14,5 +14,6 @@ public interface IAccountCommands
 
     Task<Result> SetEnabledAsync(Login login, bool enabled, CancellationToken ct);
 
-    Task<Result> MoveAsync(Login login, ClassCode fromClass, ClassCode toClass, CancellationToken ct);
+    /// <summary>Додати учня в групу класу; зі старих груп не виключає — переведення між класами немає.</summary>
+    Task<Result> EnrollAsync(Login login, ClassCode cls, CancellationToken ct);
 }

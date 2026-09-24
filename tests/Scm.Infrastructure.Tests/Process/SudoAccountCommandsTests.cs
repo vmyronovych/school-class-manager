@@ -24,14 +24,14 @@ public class SudoAccountCommandsTests
     [Fact]
     public async Task CreatePassesCyrillicAndQuotedNamesAsSingleArgumentsAndPasswordOnlyViaStdin()
     {
-        var student = new NewStudent(new Login("4a.obrajen"), "О'Брайен \"Мол.\"", "Анна-Марія", new ClassCode("4a"));
+        var student = new NewStudent(new Login("obrajen.anna.2014"), "О'Брайен \"Мол.\"", "Анна-Марія", new ClassCode("2025-4a"));
 
         var result = await _commands.CreateAsync(student, Password, CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue();
         _spec!.Arguments.Take(2).Should().Equal("-n", "/usr/local/sbin/scm-user");
         ScmUserArguments.Should().Equal(
-            "create", "4a.obrajen", "--class", "4a", "--given-name", "Анна-Марія", "--surname", "О'Брайен \"Мол.\"");
+            "create", "obrajen.anna.2014", "--class", "2025-4a", "--given-name", "Анна-Марія", "--surname", "О'Брайен \"Мол.\"");
         _spec.StandardInput.Should().Be(Password + "\n");
         _spec.Arguments.Should().NotContain(a => a.Contains(Password, StringComparison.Ordinal));
     }
@@ -39,9 +39,9 @@ public class SudoAccountCommandsTests
     [Fact]
     public async Task SetPasswordForStudentHasNoTeacherFlag()
     {
-        await _commands.SetPasswordAsync(new Login("4a.ivanenko"), Password, CancellationToken.None);
+        await _commands.SetPasswordAsync(new Login("ivanenko.petro.2011"), Password, CancellationToken.None);
 
-        ScmUserArguments.Should().Equal("setpassword", "4a.ivanenko");
+        ScmUserArguments.Should().Equal("setpassword", "ivanenko.petro.2011");
         _spec!.StandardInput.Should().Be(Password + "\n");
     }
 
@@ -58,20 +58,20 @@ public class SudoAccountCommandsTests
     [InlineData(false, "disable")]
     public async Task SetEnabledMapsToEnableOrDisable(bool enabled, string op)
     {
-        await _commands.SetEnabledAsync(new Login("3a.lysenko"), enabled, CancellationToken.None);
+        await _commands.SetEnabledAsync(new Login("lysenko.ivan.2015"), enabled, CancellationToken.None);
 
-        ScmUserArguments.Should().Equal(op, "3a.lysenko");
+        ScmUserArguments.Should().Equal(op, "lysenko.ivan.2015");
         _spec!.StandardInput.Should().BeNull();
     }
 
     [Fact]
-    public async Task UnlockAndMove()
+    public async Task UnlockAndEnroll()
     {
-        await _commands.UnlockAsync(new Login("4a.bondar"), CancellationToken.None);
-        ScmUserArguments.Should().Equal("unlock", "4a.bondar");
+        await _commands.UnlockAsync(new Login("bondar.oleksii.2014"), CancellationToken.None);
+        ScmUserArguments.Should().Equal("unlock", "bondar.oleksii.2014");
 
-        await _commands.MoveAsync(new Login("4a.bondar"), new ClassCode("4a"), new ClassCode("5a"), CancellationToken.None);
-        ScmUserArguments.Should().Equal("move", "4a.bondar", "4a", "5a");
+        await _commands.EnrollAsync(new Login("bondar.oleksii.2014"), new ClassCode("2026-5a"), CancellationToken.None);
+        ScmUserArguments.Should().Equal("enroll", "bondar.oleksii.2014", "2026-5a");
     }
 
     [Theory]
@@ -81,7 +81,7 @@ public class SudoAccountCommandsTests
     [InlineData("kit1\0")]
     public async Task RejectsEmptyOrMultilinePasswordWithoutRunningAnything(string password)
     {
-        var act = () => _commands.SetPasswordAsync(new Login("4a.ivanenko"), password, CancellationToken.None);
+        var act = () => _commands.SetPasswordAsync(new Login("ivanenko.petro.2011"), password, CancellationToken.None);
 
         await act.Should().ThrowAsync<ArgumentException>();
         await _runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default);
@@ -93,7 +93,7 @@ public class SudoAccountCommandsTests
     [InlineData("Іваненко\nX", "Петро")]
     public async Task RejectsEmptyOrMultilineNames(string surname, string givenName)
     {
-        var student = new NewStudent(new Login("4a.ivanenko"), surname, givenName, new ClassCode("4a"));
+        var student = new NewStudent(new Login("ivanenko.petro.2011"), surname, givenName, new ClassCode("2025-4a"));
 
         var act = () => _commands.CreateAsync(student, Password, CancellationToken.None);
 
@@ -102,15 +102,15 @@ public class SudoAccountCommandsTests
     }
 
     [Fact]
-    public async Task TeacherCannotBeCreatedOrMovedAsStudent()
+    public async Task TeacherCannotBeCreatedOrEnrolledAsStudent()
     {
         var teacher = new Login("olena.petrenko");
 
-        var create = () => _commands.CreateAsync(new NewStudent(teacher, "Петренко", "Олена", new ClassCode("4a")), Password, CancellationToken.None);
-        var move = () => _commands.MoveAsync(teacher, new ClassCode("4a"), new ClassCode("5a"), CancellationToken.None);
+        var create = () => _commands.CreateAsync(new NewStudent(teacher, "Петренко", "Олена", new ClassCode("2025-4a")), Password, CancellationToken.None);
+        var enroll = () => _commands.EnrollAsync(teacher, new ClassCode("2025-4a"), CancellationToken.None);
 
         await create.Should().ThrowAsync<ArgumentException>();
-        await move.Should().ThrowAsync<ArgumentException>();
+        await enroll.Should().ThrowAsync<ArgumentException>();
         await _runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default);
     }
 
@@ -118,7 +118,7 @@ public class SudoAccountCommandsTests
     [InlineData("Administrator")]
     [InlineData("admin")]
     [InlineData("root")]
-    [InlineData("4a.ivanenko --teacher")]
+    [InlineData("ivanenko.petro.2011 --teacher")]
     [InlineData("-n")]
     [InlineData("--teacher")]
     public void ForbiddenLoginsNeverReachTheWrapper(string value)
@@ -146,7 +146,7 @@ public class SudoAccountCommandsTests
     {
         _runner.RunAsync(default!, default).ReturnsForAnyArgs(new ProcessResult(-1, "", "", TimedOut: true));
 
-        var result = await _commands.SetPasswordAsync(new Login("4a.ivanenko"), Password, CancellationToken.None);
+        var result = await _commands.SetPasswordAsync(new Login("ivanenko.petro.2011"), Password, CancellationToken.None);
 
         result.Error!.Code.Should().Be("scm-user.timeout");
         result.Error.ToString().Should().NotContain(Password);

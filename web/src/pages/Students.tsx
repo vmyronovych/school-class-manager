@@ -16,8 +16,8 @@ export function Students() {
   const { t } = useTranslation();
   const [classFilter, setClassFilter] = useState<string>(ALL);
   const [query, setQuery] = useState('');
-  const [selectedKeys, setSelectedKeys] = useState<Key[]>(['4a.ivanenko']);
-  const [activeLogin, setActiveLogin] = useState<string | undefined>('4a.ivanenko');
+  const [selectedKeys, setSelectedKeys] = useState<Key[]>(['ivanenko.petro.2016']);
+  const [activeLogin, setActiveLogin] = useState<string | undefined>('ivanenko.petro.2016');
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();

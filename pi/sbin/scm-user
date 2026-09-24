@@ -1,15 +1,17 @@
 #!/bin/bash
 # Обгортка над samba-tool для School Class Manager.
 # Виклик:  scm-user <op> <login> [args...]   (пароль — зі stdin, ніколи в аргументах)
-# Ops:     create <login> --class 4a --given-name X --surname Y
+# Ops:     create <login> --class 2025-4a --given-name X --surname Y
 #          setpassword <login> [--teacher]
 #          unlock|enable|disable <login> [--teacher]
-#          move <login> <from-class> <to-class>
+#          enroll <login> <class>      (лише додати в групу класу; переведення між класами немає)
+# Логін учня: прізвище.ім'я.рік_народження (ivanenko.petro.2011), не довше 20 символів.
 set -euo pipefail
 
-LOGIN_RE='^[0-9]{1,2}[a-z]\.[a-z]+(\.[a-z]+)?$'
+LOGIN_RE='^[a-z]+(-[a-z]+)?\.[a-z]+(-[a-z]+)?(\.[a-z])?\.(19|20)[0-9]{2}$'
 TEACHER_RE='^[a-z]+\.[a-z]+(\.[a-z]+)?$'
-CLASS_RE='^[0-9]{1,2}[a-z]$'
+CLASS_RE='^20[0-9]{2}-[0-9]{1,2}[a-z]$'
+MAX_LOGIN=20
 STUDENT_OU='OU=Uchni'
 TEACHER_GROUP='vchyteli'
 ADMIN_GROUP='Domain Admins'
@@ -19,6 +21,7 @@ log() { logger -t scm-user -- "$*"; }
 
 op="${1:-}"; login="${2:-}"; shift 2 || die "usage"
 [ -n "$op" ] && [ -n "$login" ] || die "usage"
+[ "${#login}" -le "$MAX_LOGIN" ] || die "login longer than $MAX_LOGIN"
 
 teacher=0
 args=()
@@ -61,10 +64,9 @@ case "$op" in
       esac
     done
     [[ "$cls" =~ $CLASS_RE ]] || die "bad class"
-    [[ "$login" == "$cls".* ]] || die "login must start with class"
     read_password
     samba-tool user create "$login" "$pw" --given-name="$gn" --surname="$sn" \
-      --description="$cls" --userou="$STUDENT_OU"
+      --userou="$STUDENT_OU"
     samba-tool group addmembers "uchni-$cls" "$login"
     log "create $login class=$cls"
     ;;
@@ -76,12 +78,11 @@ case "$op" in
   unlock)  samba-tool user unlock "$login";  log "unlock $login" ;;
   enable)  samba-tool user enable "$login";  log "enable $login" ;;
   disable) samba-tool user disable "$login"; log "disable $login" ;;
-  move)
-    from="${args[0]:-}"; to="${args[1]:-}"
-    [[ "$from" =~ $CLASS_RE && "$to" =~ $CLASS_RE ]] || die "bad class"
-    samba-tool group removemembers "uchni-$from" "$login"
-    samba-tool group addmembers "uchni-$to" "$login"
-    log "move $login $from->$to"
+  enroll)
+    cls="${args[0]:-}"
+    [ "${#args[@]}" -eq 1 ] && [[ "$cls" =~ $CLASS_RE ]] || die "bad class"
+    samba-tool group addmembers "uchni-$cls" "$login"
+    log "enroll $login class=$cls"
     ;;
   *) die "unknown op $op" ;;
 esac

@@ -6,7 +6,7 @@ namespace Scm.Infrastructure.Tests.Process;
 /// <summary>
 /// Справжній <c>pi/sbin/scm-user</c> під bash; <c>samba-tool</c> і <c>logger</c> — фейки в PATH.
 /// Фейк записує кожен виклик одним рядком (аргументи через <c>|</c>) і відповідає як Samba з
-/// <c>viktor.admin</c> у Domain Admins, <c>olena.petrenko</c> у vchyteli, <c>4a.outsider</c> поза OU=Uchni.
+/// <c>viktor.admin</c> у Domain Admins, <c>olena.petrenko</c> у vchyteli, <c>outsider.ivan.2014</c> поза OU=Uchni.
 /// </summary>
 [UnsupportedOSPlatform("windows")]
 public sealed class ScmUserScriptTests : IDisposable
@@ -22,7 +22,7 @@ public sealed class ScmUserScriptTests : IDisposable
             esac ;;
           "user show")
             case "$3" in
-              4a.outsider) echo "dn: CN=$3,CN=Users,DC=ad,DC=school,DC=lan" ;;
+              outsider.ivan.2014) echo "dn: CN=$3,CN=Users,DC=ad,DC=school,DC=lan" ;;
               *) echo "dn: CN=$3,OU=Uchni,DC=ad,DC=school,DC=lan" ;;
             esac ;;
         esac
@@ -44,31 +44,31 @@ public sealed class ScmUserScriptTests : IDisposable
     [Fact]
     public async Task SetsStudentPasswordReadFromStdin()
     {
-        var result = await RunAsync(["setpassword", "4a.ivanenko"], "kit1\n");
+        var result = await RunAsync(["setpassword", "ivanenko.petro.2011"], "kit1\n");
 
         result.ExitCode.Should().Be(0, result.StandardError);
-        Mutations().Should().Equal("user|setpassword|4a.ivanenko|--newpassword=kit1");
+        Mutations().Should().Equal("user|setpassword|ivanenko.petro.2011|--newpassword=kit1");
     }
 
     [Fact]
     public async Task AcceptsPasswordWithoutTrailingNewline()
     {
-        var result = await RunAsync(["setpassword", "4a.ivanenko"], "kit1");
+        var result = await RunAsync(["setpassword", "ivanenko.petro.2011"], "kit1");
 
         result.ExitCode.Should().Be(0, result.StandardError);
-        Mutations().Should().Equal("user|setpassword|4a.ivanenko|--newpassword=kit1");
+        Mutations().Should().Equal("user|setpassword|ivanenko.petro.2011|--newpassword=kit1");
     }
 
     [Fact]
     public async Task CreatesStudentWithCyrillicNamesAndClassGroup()
     {
         var result = await RunAsync(
-            ["create", "4a.obrajen", "--class", "4a", "--given-name", "Анна-Марія", "--surname", "О'Брайен"], "kit1\n");
+            ["create", "obrajen.anna.2014", "--class", "2025-4a", "--given-name", "Анна-Марія", "--surname", "О'Брайен"], "kit1\n");
 
         result.ExitCode.Should().Be(0, result.StandardError);
         Mutations().Should().Equal(
-            "user|create|4a.obrajen|kit1|--given-name=Анна-Марія|--surname=О'Брайен|--description=4a|--userou=OU=Uchni",
-            "group|addmembers|uchni-4a|4a.obrajen");
+            "user|create|obrajen.anna.2014|kit1|--given-name=Анна-Марія|--surname=О'Брайен|--userou=OU=Uchni",
+            "group|addmembers|uchni-2025-4a|obrajen.anna.2014");
     }
 
     [Fact]
@@ -85,13 +85,16 @@ public sealed class ScmUserScriptTests : IDisposable
     [InlineData("setpassword", "viktor.admin", "--teacher")]
     [InlineData("unlock", "viktor.admin", "--teacher")]
     [InlineData("disable", "Administrator", "")]
-    [InlineData("setpassword", "4a.outsider", "")]
+    [InlineData("setpassword", "outsider.ivan.2014", "")]
     [InlineData("setpassword", "4A.Ivanenko", "")]
-    [InlineData("setpassword", "4a.ivanenko;id", "")]
+    [InlineData("setpassword", "ivanenko.petro.2011;id", "")]
+    [InlineData("setpassword", "4a.ivanenko", "")]
+    [InlineData("setpassword", "kovalenko.anastasiia.2011", "")]
     [InlineData("setpassword", "", "")]
-    [InlineData("move", "olena.petrenko", "--teacher")]
+    [InlineData("enroll", "olena.petrenko", "--teacher")]
+    [InlineData("move", "ivanenko.petro.2011", "")]
     [InlineData("create", "olena.petrenko", "--teacher")]
-    [InlineData("delete", "4a.ivanenko", "")]
+    [InlineData("delete", "ivanenko.petro.2011", "")]
     public async Task RefusesForbiddenTargetsAndOps(string op, string login, string flag)
     {
         string[] arguments = flag.Length == 0 ? [op, login] : [op, login, flag];
@@ -107,30 +110,45 @@ public sealed class ScmUserScriptTests : IDisposable
     [InlineData("\n", "empty password")]
     public async Task RefusesEmptyPassword(string stdin, string error)
     {
-        var result = await RunAsync(["setpassword", "4a.ivanenko"], stdin);
+        var result = await RunAsync(["setpassword", "ivanenko.petro.2011"], stdin);
 
         result.ExitCode.Should().Be(2);
         result.StandardError.Should().Contain(error);
         Mutations().Should().BeEmpty();
     }
 
-    [Fact]
-    public async Task CreateRefusesLoginFromAnotherClass()
+    [Theory]
+    [InlineData("4a")]
+    [InlineData("2025-4A")]
+    [InlineData("")]
+    public async Task CreateRefusesBadClass(string cls)
     {
         var result = await RunAsync(
-            ["create", "3a.ivanenko", "--class", "4a", "--given-name", "Петро", "--surname", "Іваненко"], "kit1\n");
+            ["create", "ivanenko.petro.2011", "--class", cls, "--given-name", "Петро", "--surname", "Іваненко"], "kit1\n");
 
-        result.StandardError.Should().Contain("login must start with class");
+        result.StandardError.Should().Contain("bad class");
         Mutations().Should().BeEmpty();
     }
 
     [Fact]
-    public async Task MovesBetweenClassGroups()
+    public async Task EnrollOnlyAddsToNewClassGroup()
     {
-        var result = await RunAsync(["move", "4a.bondar", "4a", "5a"], null);
+        var result = await RunAsync(["enroll", "bondar.oleksii.2014", "2026-5a"], null);
 
         result.ExitCode.Should().Be(0, result.StandardError);
-        Mutations().Should().Equal("group|removemembers|uchni-4a|4a.bondar", "group|addmembers|uchni-5a|4a.bondar");
+        Mutations().Should().Equal("group|addmembers|uchni-2026-5a|bondar.oleksii.2014");
+    }
+
+    [Theory]
+    [InlineData]
+    [InlineData("5a")]
+    [InlineData("2026-5a", "2025-4a")]
+    public async Task EnrollRefusesBadClass(params string[] classArgs)
+    {
+        var result = await RunAsync(["enroll", "bondar.oleksii.2014", .. classArgs], null);
+
+        result.StandardError.Should().Contain("bad class");
+        Mutations().Should().BeEmpty();
     }
 
     private static string ScriptPath()

@@ -42,14 +42,13 @@ public sealed class SudoAccountCommands(SudoRunner sudo) : IAccountCommands
         return RunAsync(WithTeacherFlag([enabled ? "enable" : "disable", login.Value], login), null, ct);
     }
 
-    public Task<Result> MoveAsync(Login login, ClassCode fromClass, ClassCode toClass, CancellationToken ct)
+    public Task<Result> EnrollAsync(Login login, ClassCode cls, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(login);
-        ArgumentNullException.ThrowIfNull(fromClass);
-        ArgumentNullException.ThrowIfNull(toClass);
+        ArgumentNullException.ThrowIfNull(cls);
         RequireStudent(login);
 
-        return RunAsync(["move", login.Value, fromClass.Value, toClass.Value], null, ct);
+        return RunAsync(["enroll", login.Value, cls.Value], null, ct);
     }
 
     private async Task<Result> RunAsync(string[] arguments, string? input, CancellationToken ct)
