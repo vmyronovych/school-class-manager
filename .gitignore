@@ -61,3 +61,22 @@ out/
 
 # macOS
 .DS_Store
+
+# Classroom infrastructure: credentials, VM state and personal data never belong in Git.
+.local-tools/
+.vagrant/
+server/config.local.json
+server/config.*.local.json
+server/secrets/
+server/test-results.local/
+__pycache__/
+*.vdi
+*.vmdk
+*.vhd
+*.vhdx
+*.iso
+*.box
+*.ova
+*.tar
+*.tar.bz2
+*.gpg

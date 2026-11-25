@@ -1,0 +1,13 @@
+{
+  "name": "bento/ubuntu-24.04",
+  "versions": [{
+    "version": "202510.26.0",
+    "providers": [{
+      "name": "virtualbox",
+      "architecture": "amd64",
+      "url": "https://vagrantcloud.com/bento/boxes/ubuntu-24.04/versions/202510.26.0/providers/virtualbox/amd64/vagrant.box",
+      "checksum_type": "sha256",
+      "checksum": "14ae82e423c270d1c03907faf90691b0fbd673b16bfc369a949808e4e6991b82"
+    }]
+  }]
+}

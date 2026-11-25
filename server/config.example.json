@@ -1,0 +1,20 @@
+{
+  "mode": "lab",
+  "confirmed": false,
+  "realm": "AD.CLASSROOM.TEST",
+  "domain": "CLASSROOM",
+  "hostname": "dc1",
+  "ip": "192.168.77.10",
+  "netmask": "255.255.255.0",
+  "gateway": "",
+  "dns_forwarder": "1.1.1.1",
+  "bridge": "Intel(R) Ethernet Connection I219-LM",
+  "memory_mb": 4096,
+  "cpus": 2,
+  "state_disk": "C:/ClassroomState/lab-state.vdi",
+  "state_disk_mb": 65536,
+  "initialize_storage": false,
+  "pupil_iso": "",
+  "pupil_iso_sha256": "",
+  "pupil_memory_mb": 4096
+}

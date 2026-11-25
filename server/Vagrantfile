@@ -1,0 +1,110 @@
+# Host dependencies are pinned in dependencies.json; no third-party plugins.
+require 'json'
+require 'ipaddr'
+require 'open3'
+require 'pathname'
+
+root = File.expand_path(__dir__)
+path = ENV.fetch('CLASSROOM_CONFIG', File.join(root, 'config.local.json'))
+raise 'Copy config.example.json to config.local.json first' unless File.file?(path)
+c = JSON.parse(File.read(path))
+%w[realm domain hostname ip netmask dns_forwarder mode state_disk].each { |k| raise "Missing #{k}" unless c[k].is_a?(String) && !c[k].empty? }
+raise 'Invalid realm' unless c['realm'].match?(/\A[A-Z][A-Z0-9-]*(\.[A-Z][A-Z0-9-]*)+\z/)
+raise 'Invalid NetBIOS domain' unless c['domain'].match?(/\A[A-Z][A-Z0-9-]{0,14}\z/)
+raise 'Invalid hostname' unless c['hostname'].match?(/\A[a-z][a-z0-9-]{0,14}\z/)
+%w[ip netmask dns_forwarder].each { |k| raise "IPv4 required: #{k}" unless IPAddr.new(c[k]).ipv4? }
+raise 'mode must be lab, recovery or lan' unless %w[lab recovery lan].include?(c['mode'])
+if c['mode'] == 'lan'
+  raise 'Confirm domain/addressing, then set confirmed=true' unless c['confirmed'] == true
+  raise 'LAN requires bridge and gateway' if c['bridge'].to_s.empty? || c['gateway'].to_s.empty?
+  IPAddr.new(c['gateway'])
+elsif c['mode'] == 'lab' && !c['realm'].end_with?('.TEST')
+  raise 'Lab realm must end in .TEST'
+end
+disk = File.expand_path(c['state_disk'])
+raise 'State disk must be an absolute path outside this checkout' unless Pathname.new(c['state_disk']).absolute? || c['state_disk'].match?(/\A[A-Za-z]:[\\\/]/)
+raise 'State disk must be outside checkout' if disk.downcase.start_with?(root.downcase + '/')
+raise 'Create external disk with host/New-StateDisk.ps1 first' unless File.file?(disk)
+
+Vagrant.require_version '= 2.4.9'
+Vagrant.configure('2') do |config|
+  config.vm.define 'server', primary: true do |s|
+    s.vm.box = 'bento/ubuntu-24.04'
+    s.vm.box_url = File.join(root, 'box-metadata.json')
+    s.vm.box_version = '202510.26.0'
+    s.vm.box_architecture = 'amd64'
+    s.vm.box_check_update = false
+    s.vm.hostname = "#{c['hostname']}.#{c['realm'].downcase}"
+    s.vm.synced_folder '.', '/vagrant', disabled: true
+    # NIC 1 is NAT for Vagrant SSH/apt only. Samba binds NIC 2 and loopback.
+    if c['mode'] == 'lan'
+      s.vm.network 'public_network', bridge: c['bridge'], auto_config: false
+    else
+      # A VirtualBox internal network does not alter host adapters or DNS.
+      s.vm.network 'private_network', ip: c['ip'], auto_config: false,
+                   virtualbox__intnet: 'classroom-isolated'
+    end
+    s.vm.provider 'virtualbox' do |vb|
+      vb.name = "classroom-#{c['mode']}-server"
+      vb.memory = Integer(c.fetch('memory_mb', 4096))
+      vb.cpus = Integer(c.fetch('cpus', 2))
+      vb.gui = false
+      # The pinned Bento box uses this controller. Port 0 is its disposable OS.
+      vb.customize ['storageattach', :id, '--storagectl', 'SATA Controller', '--port', 1,
+                    '--device', 0, '--type', 'hdd', '--medium', disk]
+    end
+    s.vm.provision 'file', source: File.join(root, 'scripts'), destination: '/tmp/classroom-scripts'
+    s.vm.provision 'file', source: path, destination: '/tmp/classroom-config.json'
+    s.vm.provision 'shell', path: File.join(root, 'scripts', 'provision.sh'), privileged: true
+    s.trigger.before :destroy do |t|
+      t.name = 'Detach and protect persistent domain/pupil disk'
+      t.ruby do |_env, machine|
+        next unless machine.id
+        exe = ENV.fetch('VBOXMANAGE', 'C:/Program Files/Oracle/VirtualBox/VBoxManage.exe')
+        run = lambda do |*args|
+          out, status = Open3.capture2e(exe, *args)
+          raise "VBoxManage failed: #{out}" unless status.success?
+          out
+        end
+        info = run.call('showvminfo', machine.id, '--machinereadable')
+        raise 'Halt server before destroy (vagrant halt server)' unless info.include?('VMState="poweroff"')
+        raise 'Snapshots are unsupported; remove snapshots safely first' unless run.call('snapshot', machine.id, 'list', '--machinereadable').include?('This machine does not have any snapshots')
+        line = info.lines.find { |l| l.start_with?('"SATA Controller-1-0"=') }
+        if line && !line.include?('="none"')
+          attached = line.split('=', 2)[1].strip.delete_prefix('"').delete_suffix('"').gsub('\\\\', '\\')
+          raise 'Unexpected disk on persistent port; refusing destroy' unless File.expand_path(attached).casecmp?(disk)
+          run.call('storageattach', machine.id, '--storagectl', 'SATA Controller', '--port', '1', '--device', '0', '--type', 'hdd', '--medium', 'none')
+        end
+        raise 'Persistent disk missing; refusing destroy' unless File.file?(disk)
+      end
+    end
+  end
+  # Only one optional pupil VM. Install Windows from licensed/evaluation media.
+  unless c['pupil_iso'].to_s.empty?
+    raise 'Pupil test VM is for isolated lab/recovery mode only' if c['mode'] == 'lan'
+    require 'digest'
+    iso = File.expand_path(c['pupil_iso'])
+    raise 'Windows ISO missing/checksum mismatch' unless File.file?(iso) && Digest::SHA256.file(iso).hexdigest == c['pupil_iso_sha256']
+    config.vm.define 'pupil', autostart: false do |p|
+      # Minimal Linux box supplies bootable VM hardware; Windows replaces its OS.
+      p.vm.box = 'bento/ubuntu-24.04'
+      p.vm.box_url = File.join(root, 'box-metadata.json')
+      p.vm.box_version = '202510.26.0'
+      p.vm.box_architecture = 'amd64'
+      p.vm.box_check_update = false
+      p.vm.communicator = 'none'
+      p.vm.synced_folder '.', '/vagrant', disabled: true
+      p.vm.network 'private_network', ip: '192.168.77.20', auto_config: false,
+                   virtualbox__intnet: 'classroom-isolated'
+      p.vm.provider 'virtualbox' do |vb|
+        vb.name = 'classroom-lab-pupil'
+        vb.memory = Integer(c.fetch('pupil_memory_mb', 4096))
+        vb.cpus = 2
+        vb.gui = true
+        vb.customize ['modifyvm', :id, '--ostype', 'Windows10_64', '--boot1', 'dvd', '--boot2', 'disk']
+        vb.customize ['storageattach', :id, '--storagectl', 'SATA Controller', '--port', 2,
+                      '--device', 0, '--type', 'dvddrive', '--medium', iso]
+      end
+    end
+  end
+end

@@ -1,0 +1,10 @@
+{
+  "vagrant": "2.4.9",
+  "virtualbox": "7.2.20",
+  "box": "bento/ubuntu-24.04",
+  "box_version": "202510.26.0",
+  "box_architecture": "amd64",
+  "guest": "Ubuntu 24.04 LTS",
+  "packages": ["samba", "samba-ad-dc", "samba-dsdb-modules", "samba-vfs-modules", "winbind", "krb5-user", "smbclient", "ldb-tools", "dnsutils", "acl", "attr", "chrony", "python3-samba", "gnupg"],
+  "package_policy": "Ubuntu noble/noble-updates/noble-security; exact resolved versions recorded on persistent disk and in backups. Security updates intentionally not frozen."
+}

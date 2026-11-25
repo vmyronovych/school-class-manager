@@ -1,0 +1,3 @@
+server/scripts/*.sh text eol=lf
+server/scripts/*.py text eol=lf
+server/Vagrantfile text eol=lf
