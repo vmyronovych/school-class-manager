@@ -46,7 +46,10 @@ describe('Pupil panel', () => {
     let savedName: string | undefined;
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { savedName = this.download; });
     renderApp();
-    fireEvent.click(await screen.findByRole('button', { name: 'Файли' }));
+    // Wait for query data before expensive accessible-role searches through antd.
+    // Otherwise role polling can starve query notifications on Node 20 in CI.
+    expect(await screen.findByText(pupil.displayName)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Файли' }));
     expect(await screen.findByText('Файли учня student1')).toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: /Урок 1/ }));
     expect(await screen.findByText('Робота #1.txt')).toBeInTheDocument();
@@ -60,7 +63,8 @@ describe('Pupil panel', () => {
   }, 15000);
   it('shows file access refusal instead of exposing cached file entries', async () => {
     renderApp();
-    fireEvent.click(await screen.findByRole('button', { name: 'Файли' }));
+    expect(await screen.findByText(pupil.displayName)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Файли' }));
     expect(await screen.findByRole('button', { name: /Урок 1/ })).toBeInTheDocument();
     failFiles = true;
     fireEvent.click(screen.getByRole('button', { name: /Оновити/ }));
@@ -84,7 +88,8 @@ describe('Pupil panel', () => {
   });
   it('confirms reset and clears the displayed secret when closed', async () => {
     renderApp();
-    fireEvent.click(await screen.findByRole('button', { name: /Скинути пароль/ }));
+    expect(await screen.findByText(pupil.displayName)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Скинути пароль/ }));
     expect(calls.some(path => path.endsWith('/reset-password'))).toBe(false);
     const buttons = screen.getAllByRole('button', { name: /Скинути пароль/ });
     fireEvent.click(buttons[buttons.length - 1]);
