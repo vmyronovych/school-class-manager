@@ -9,4 +9,5 @@ public enum SudoProgram
     Snap,
     Backup,
     ScmUpdate,
+    ScmDirectory,
 }

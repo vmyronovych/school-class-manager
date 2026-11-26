@@ -1,126 +1,82 @@
-import { useMemo, useState } from 'react';
-import type { Key } from 'react';
+import { useState } from 'react';
+import { useNavigate } from 'react-router';
+import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Button, Flex, Input, Radio, Table, Typography } from 'antd';
-import type { TableColumnsType } from 'antd';
-import { IdcardOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons';
-import { mockClasses, mockStudents, mockSummary, type StudentRow, type StudentStatus } from './students/mockData';
-import { StatusTag } from './students/StatusTag';
-import { StudentCard } from './students/StudentCard';
-
-const ALL = 'all';
-const TEACHERS = 'teachers';
-const statuses: StudentStatus[] = ['Active', 'Locked', 'NeverLoggedIn', 'Disabled'];
+import { Alert, Button, Flex, Form, Input, Modal, Table, Tag, Typography } from 'antd';
+import { PlusOutlined, ReloadOutlined, KeyOutlined } from '@ant-design/icons';
+import { errorCode, request, type Credentials, type NewPupil, type Pupil } from '../api/panel';
 
 export function Students() {
+  const navigate = useNavigate();
   const { t } = useTranslation();
-  const [classFilter, setClassFilter] = useState<string>(ALL);
+  const pupils = useQuery({ queryKey: ['students'], queryFn: () => request<Pupil[]>('/api/students'), retry: false });
   const [query, setQuery] = useState('');
-  const [selectedKeys, setSelectedKeys] = useState<Key[]>(['4a.ivanenko']);
-  const [activeLogin, setActiveLogin] = useState<string | undefined>('4a.ivanenko');
+  const [creating, setCreating] = useState(false);
+  const [reset, setReset] = useState<Pupil>();
+  const [credentials, setCredentials] = useState<Credentials>();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string>();
+  const [form] = Form.useForm<NewPupil>();
 
-  const rows = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return mockStudents.filter(
-      (s) =>
-        (classFilter === ALL || s.classCode === classFilter) &&
-        (q === '' || s.name.toLowerCase().includes(q) || s.login.includes(q)),
-    );
-  }, [classFilter, query]);
-
-  // Вчителів у статичних даних немає — вкладка порожня до сесії 3.
-  const visible = classFilter === TEACHERS ? [] : rows;
-
-  const columns: TableColumnsType<StudentRow> = [
-    {
-      title: t('students.columns.login'),
-      dataIndex: 'login',
-      width: 160,
-      sorter: (a, b) => a.login.localeCompare(b.login),
-      render: (login: string) => <Typography.Text code>{login}</Typography.Text>,
-    },
-    {
-      title: t('students.columns.name'),
-      dataIndex: 'name',
-      sorter: (a, b) => a.name.localeCompare(b.name, 'uk'),
-      render: (name: string, row) => (
-        <Typography.Link onClick={() => setActiveLogin(row.login)}>{name}</Typography.Link>
-      ),
-    },
-    { title: t('students.columns.class'), dataIndex: 'classDisplay', width: 70 },
-    {
-      title: t('students.columns.status'),
-      dataIndex: 'status',
-      width: 140,
-      filters: statuses.map((s) => ({ text: t(`students.status.${s}`), value: s })),
-      onFilter: (value, row) => row.status === value,
-      render: (status: StudentStatus) => <StatusTag status={status} />,
-    },
-    { title: t('students.columns.lastLogon'), dataIndex: 'lastLogon', width: 150 },
-    { title: t('students.columns.folder'), dataIndex: 'folderSize', width: 80, align: 'right' },
-  ];
-
-  return (
-    <Flex vertical gap={16}>
-      <Flex justify="space-between" align="flex-start">
-        <div>
-          <Typography.Title level={4} style={{ margin: 0 }}>
-            {t('nav.students')}
-          </Typography.Title>
-          <Typography.Text type="secondary">{t('students.summary', mockSummary)}</Typography.Text>
-        </div>
-        <Flex gap={8}>
-          <Button size="large" icon={<UploadOutlined />}>
-            {t('students.importCsv')}
-          </Button>
-          <Button size="large" icon={<IdcardOutlined />}>
-            {t('students.loginCards')}
-          </Button>
-          <Button size="large" type="primary" icon={<PlusOutlined />}>
-            {t('students.addStudent')}
-          </Button>
-        </Flex>
-      </Flex>
-
-      <Flex align="center" gap={16}>
-        <Radio.Group value={classFilter} onChange={(e) => setClassFilter(e.target.value as string)}>
-          <Radio.Button value={ALL}>{t('students.filterAll')}</Radio.Button>
-          {mockClasses.map((c) => (
-            <Radio.Button key={c.code} value={c.code}>
-              {c.display}
-            </Radio.Button>
-          ))}
-          <Radio.Button value={TEACHERS}>{t('students.filterTeachers')}</Radio.Button>
-        </Radio.Group>
-        <Input.Search
-          allowClear
-          placeholder={t('students.searchPlaceholder')}
-          style={{ maxWidth: 360 }}
-          onSearch={setQuery}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <div style={{ flex: 1 }} />
-        <Typography.Text type="secondary">{t('students.selected', { count: selectedKeys.length })}</Typography.Text>
-      </Flex>
-
-      <Flex gap={16} align="flex-start">
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <Table<StudentRow>
-            rowKey="login"
-            size="middle"
-            columns={columns}
-            dataSource={visible}
-            rowSelection={{ selectedRowKeys: selectedKeys, onChange: setSelectedKeys }}
-            pagination={{
-              pageSize: 10,
-              showTotal: () => t('students.total', { total: mockSummary.accounts }),
-            }}
-          />
-        </div>
-        <div style={{ width: 340, flexShrink: 0 }}>
-          <StudentCard student={mockStudents.find((s) => s.login === activeLogin)} />
-        </div>
+  async function mutate(body?: NewPupil) {
+    setPending(true); setError(undefined); setCredentials(undefined);
+    try {
+      const result = body
+        ? await request<Credentials>('/api/students', body)
+        : await request<Credentials>(`/api/students/${encodeURIComponent(reset!.login)}/reset-password`, {});
+      setCreating(false); setReset(undefined); if (body) form.resetFields(); setCredentials(result);
+      await pupils.refetch();
+    } catch (failure) { setError(errorCode(failure)); }
+    finally { setPending(false); }
+  }
+  const search = query.trim().toLocaleLowerCase('uk');
+  const rows = (pupils.data ?? []).filter(p => `${p.login} ${p.displayName}`.toLocaleLowerCase('uk').includes(search));
+  return <Flex vertical gap={20}>
+    <Flex justify="space-between" align="center" wrap gap={12}>
+      <div><Typography.Title level={2} style={{ margin: 0 }}>{t('nav.students')}</Typography.Title>
+        <Typography.Text type="secondary">{t('panel.subtitle')}</Typography.Text></div>
+      <Flex gap={8}>
+        <Button icon={<ReloadOutlined />} loading={pupils.isFetching} onClick={() => void pupils.refetch()}>{t('panel.refresh')}</Button>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setCreating(true); setError(undefined); }}>{t('panel.add')}</Button>
       </Flex>
     </Flex>
-  );
+    {pupils.isError && <Alert type="error" showIcon message={t(`panel.errors.${errorCode(pupils.error)}`)} />}
+    <Input.Search aria-label={t('panel.search')} placeholder={t('panel.search')} allowClear value={query} onChange={e => setQuery(e.target.value)} style={{ maxWidth: 420 }} />
+    <Table<Pupil> rowKey="login" dataSource={rows} loading={pupils.isPending} scroll={{ x: 620 }}
+      pagination={{ pageSize: 15, hideOnSinglePage: true }} locale={{ emptyText: t('panel.empty') }} columns={[
+        { title: t('panel.login'), dataIndex: 'login', render: (value: string) => <Typography.Text code>{value}</Typography.Text> },
+        { title: t('panel.name'), dataIndex: 'displayName' },
+        { title: t('panel.status'), render: (_, row) => <Tag color={row.enabled ? 'green' : 'default'}>{t(row.enabled ? 'panel.active' : 'panel.disabled')}</Tag> },
+        { title: t('panel.actions'), render: (_, row) => <Flex gap={8} wrap>
+          <Button onClick={() => void navigate(`/students/${encodeURIComponent(row.login)}/files`)}>{t('files.open')}</Button>
+          <Button icon={<KeyOutlined />} onClick={() => { setReset(row); setError(undefined); }}>{t('panel.reset')}</Button>
+        </Flex> },
+      ]} />
+    <Modal title={t('panel.add')} open={creating} destroyOnHidden closable={!pending} maskClosable={!pending}
+      onCancel={() => { setCreating(false); setError(undefined); }} onOk={() => form.submit()} confirmLoading={pending}
+      okText={t('panel.create')} cancelText={t('panel.cancel')} cancelButtonProps={{ disabled: pending }}>
+      {error && <Alert type="error" showIcon message={t(`panel.errors.${error}`)} />}
+      <Form form={form} layout="vertical" onFinish={values => void mutate(values)} disabled={pending}>
+        <Form.Item name="login" label={t('panel.login')} extra={t('panel.loginHint')}
+          rules={[{ required: true, message: t('panel.required') }, { pattern: /^[a-z][a-z0-9.-]{0,63}$/, message: t('panel.loginHint') }]}>
+          <Input autoComplete="off" maxLength={64} />
+        </Form.Item>
+        <Form.Item name="surname" label={t('panel.surname')} rules={[{ required: true, whitespace: true, message: t('panel.required') }]}><Input maxLength={64} /></Form.Item>
+        <Form.Item name="givenName" label={t('panel.givenName')} rules={[{ required: true, whitespace: true, message: t('panel.required') }]}><Input maxLength={64} /></Form.Item>
+        <Typography.Paragraph type="secondary">{t('panel.createHint')}</Typography.Paragraph>
+      </Form>
+    </Modal>
+    <Modal title={t('panel.reset')} open={!!reset} closable={!pending} maskClosable={!pending}
+      onCancel={() => { setReset(undefined); setError(undefined); }} onOk={() => void mutate()} confirmLoading={pending}
+      okText={t('panel.reset')} cancelText={t('panel.cancel')} cancelButtonProps={{ disabled: pending }}>
+      <Typography.Paragraph>{t('panel.resetHint', { login: reset?.login })}</Typography.Paragraph>
+      {error && <Alert type="error" showIcon message={t(`panel.errors.${error}`)} />}
+    </Modal>
+    <Modal destroyOnHidden title={t('panel.credentials')} open={!!credentials} onCancel={() => setCredentials(undefined)}
+      footer={<Button type="primary" onClick={() => setCredentials(undefined)}>{t('panel.saved')}</Button>}>
+      <Typography.Paragraph>{t('panel.login')}: <Typography.Text code>{credentials?.login}</Typography.Text></Typography.Paragraph>
+      <Typography.Paragraph>{t('panel.password')}: <Typography.Text code copyable={credentials ? { text: credentials.password } : false}>{credentials?.password}</Typography.Text></Typography.Paragraph>
+      <Alert type="info" showIcon message={t('panel.secretHint')} />
+    </Modal>
+  </Flex>;
 }
