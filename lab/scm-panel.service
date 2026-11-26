@@ -1,0 +1,24 @@
+[Unit]
+Description=School Class Manager pupil panel
+After=network-online.target samba-ad-dc.service
+Requires=samba-ad-dc.service
+
+[Service]
+User=scm
+Group=scm
+WorkingDirectory=/opt/scm-panel/current
+ExecStart=/opt/scm-panel/current/Scm.Api
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=DOTNET_gcServer=0
+Environment=ASPNETCORE_Kestrel__Endpoints__Https__Url=https://0.0.0.0:8443
+Environment=ASPNETCORE_Kestrel__Endpoints__Https__Certificate__Path=/etc/scm-panel/server.pfx
+Environment=DataProtectionPath=/var/lib/scm-panel/keys
+UMask=0077
+PrivateTmp=yes
+ProtectHome=yes
+Restart=on-failure
+RestartSec=5
+MemoryMax=512M
+
+[Install]
+WantedBy=multi-user.target

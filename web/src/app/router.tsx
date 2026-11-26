@@ -1,21 +1,11 @@
-import type { RouteObject } from 'react-router';
+import { Navigate, type RouteObject } from 'react-router';
 import { AppLayout } from './AppLayout';
-import { Dashboard } from '../pages/Dashboard';
 import { Students } from '../pages/Students';
-import { Files } from '../pages/Files';
-import { Server } from '../pages/Server';
-import { Settings } from '../pages/Settings';
+import { StudentFiles } from '../pages/StudentFiles';
 
-export const routes: RouteObject[] = [
-  {
-    path: '/',
-    element: <AppLayout />,
-    children: [
-      { index: true, element: <Dashboard /> },
-      { path: 'students', element: <Students /> },
-      { path: 'files', element: <Files /> },
-      { path: 'server', element: <Server /> },
-      { path: 'settings', element: <Settings /> },
-    ],
-  },
-];
+export const routes: RouteObject[] = [{ path: '/', element: <AppLayout />, children: [
+  { index: true, element: <Navigate to="/students" replace /> },
+  { path: 'students', element: <Students /> },
+  { path: 'students/:login/files', element: <StudentFiles /> },
+  { path: '*', element: <Navigate to="/students" replace /> },
+]}];

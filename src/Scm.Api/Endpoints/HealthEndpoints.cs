@@ -8,7 +8,7 @@ public static class HealthEndpoints
     {
         // M4 додасть перевірки Samba, LDAP і диска.
         app.MapGet("/healthz", () => TypedResults.Ok(new HealthResponse(true, AppVersion.Current)))
-            .WithName("GetHealth")
+            .AllowAnonymous().WithName("GetHealth")
             .WithTags("Health");
 
         return app;

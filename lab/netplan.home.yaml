@@ -1,0 +1,16 @@
+# Home lab only. Adapt interface, address, gateway and DNS for the school LAN.
+# The router reserves 192.168.1.176 for this VM; eth0 stays managed by Multipass.
+network:
+  version: 2
+  ethernets:
+    eth1:
+      dhcp4: false
+      addresses:
+        - 192.168.1.176/24
+      routes:
+        - to: default
+          via: 192.168.1.1
+          metric: 200
+      nameservers:
+        addresses:
+          - 192.168.1.1

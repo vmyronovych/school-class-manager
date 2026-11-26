@@ -49,6 +49,7 @@ public sealed class SudoRunner(IProcessRunner runner)
         SudoProgram.Snap => ["-n", "/usr/local/sbin/snap.sh"],
         SudoProgram.Backup => ["-n", "/usr/local/sbin/backup.sh"],
         SudoProgram.ScmUpdate => ["-n", "/usr/bin/systemctl", "start", "scm-update.service"],
+        SudoProgram.ScmDirectory => ["-n", "/usr/local/sbin/scm-directory"],
         _ => throw new ArgumentOutOfRangeException(nameof(program), program, "Програми немає в білому списку."),
     };
 }
