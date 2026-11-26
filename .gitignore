@@ -61,3 +61,10 @@ out/
 
 # macOS
 .DS_Store
+
+# Local lab backups contain pupil files; never commit them.
+.local-backups/
+
+# Python validation caches
+__pycache__/
+*.pyc

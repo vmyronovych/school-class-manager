@@ -1,0 +1,5 @@
+# Keep Linux VM scripts executable after a Windows checkout.
+*.sh text eol=lf
+*.py text eol=lf
+*.service text eol=lf
+*.yaml text eol=lf

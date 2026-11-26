@@ -1,51 +1,58 @@
-# School Class Manager — контекст для Claude Code
+# School Class Manager — робочий контекст
 
-Веб-застосунок на Raspberry Pi 4 (Samba AD DC) для вчителя інформатики: облікові записи учнів, файли (роздатки / здані роботи / папки), стан сервера. Відкривається з ПК класу за `https://dc1.ad.school.lan`, вхід доменним логіном.
+## Чинний стан і пріоритети
 
-Джерело істини для архітектури, API, безпеки й етапів — `docs/plan.md`. Інфраструктура, на яку застосунок спирається, — `docs/deployment.md`. Мокапи (Ant Design) — `docs/mockups.md`. Читай ці три файли перед першою задачею.
+Починати з [README](README.md) і [checkpoint 2026-11-26](docs/checkpoint-2026-11-26.md). Вони та `docs/lab-*.md` мають пріоритет над архівним Pi-планом у `docs/plan.md`, `docs/deployment.md`, мокапами й `pi/`.
 
-## Стек
+Основна гілка — `main`. PR #3 (`m1/s2a-login-format`, d9872ed) і #4 (`classroom-server-infrastructure`, 5b30382) замінені перевіреним напрямом без злиття; гілки зберігаються для довідки. Не зливати автоматично старі припущення про формати логінів, mandatory profiles чи Vagrant.
 
-- Бекенд: .NET 8, ASP.NET Core Minimal API, cookie auth, SSE, OpenAPI (Swashbuckle). Publish `linux-arm64` self-contained.
-- Фронтенд: React 18 + TypeScript + Vite, Ant Design 5 (`antd`, `@ant-design/icons`), TanStack Query, react-router, react-i18next (`uk` за замовчуванням). TS-клієнт генерується з OpenAPI (`openapi-typescript`).
-- Дані: LDAP (`System.DirectoryServices.Protocols`, `ldapi:///`), процеси через `CliWrap`, файли через `System.IO` у `/srv/data`, SQLite (`Microsoft.Data.Sqlite` + Dapper) для журналу.
-- PDF картки: QuestPDF (Community) з вбудованим IBM Plex Sans. CSV: CsvHelper. Логи: Serilog → journald.
-- Тести: xUnit + FluentAssertions + NSubstitute; `WebApplicationFactory` для API; Vitest + Testing Library + MSW для SPA.
+Перевірено:
 
-## Команди
+- MacBook M1 16 GB → Multipass 1.17.2 → Ubuntu 24.04 ARM64 `school-server` (2 CPU, 4 GB RAM, 30 GB диск). LAN `192.168.1.176`, домен `school.test` / `SCHOOL`, Samba 4.19.5. Домен уже існує; повторний provisioning не запускати.
+- Фізичний Windows 10 Pro Education `DESKTOP-N8KR882` приєднано до домену, secure channel працює. Student1/student2 входили, записували файли на H:, доступ до чужих папок відхилено.
+- Жива панель `https://school-server.school.test:8443` / `https://192.168.1.176:8443`, systemd `scm-panel`. Вхід із Mac, створення vmyronovych, пароль і вхід цього учня у Windows підтверджені користувачем. Перегляд папок і завантаження через панель працюють.
+- GPO `SCM - Student Documents and Desktop`, GUID `{7160EA2E-5F7D-492A-B06F-D9C1F8F21034}`, тільки scm-students. Заголовок fdeploy1.ini **Version=100**, не VersionNumber: стара форма давала event 511. Встановлена user revision 2 (131072). Після виправлення користувач підтвердив UNC MyDocuments і появу Documents/Desktop для vmyronovych та student2. Деталі в docs/lab-folder-redirection.md.
+- Ручні копії та ізольоване відновлення старого комплекту Samba пройдені. `school-recovery` зупинена, не підключати її до робочої LAN. TLS/стан панелі й аудит ще не включені в повне перевірене відновлення; автоматичні копії не налаштовані.
 
+Наступний узгоджений напрям — Shared PC через PowerShell на тестовому Windows-клієнті, потім шкільний Windows-хост і Ubuntu x64. Shared PC поки не реалізований; на Windows-хості серверної VM його не вмикати. Не видаляти реальні локальні профілі без інвентаризації й узгодження конкретного охоплення. Масові операції/класи/нові екрани поза поточним етапом.
+
+## Повторюваність та приватні дані
+
+- Кожну дію має бути можливо повторити на шкільному Windows-хості. Документувати місце виконання: Mac, PowerShell хоста, Ubuntu VM або Windows-клієнт. Перевірене лише на Mac не називати перевіреним на Windows.
+- Скрипти lab/ поки прив'язані до тестових імен, адрес та початкових student1/student2. Перед школою потрібна конфігурація та окрема перевірка Ethernet/віртуалізації. Не переносити ARM64-диск на x64.
+- Паролі задає користувач приватно; не запитувати їх у чаті. Не включати секрети у argv, журнали чи Git. `.local-backups/` містить приватні дані, не комітити. `web/.vite/` — локальний кеш, не видаляти заради чистого git status.
+- Поточні паролі реальних акаунтів не змінювати для тестів. Живі smoke-тести створюють окремі тимчасові акаунти й прибирають тільки свої дані.
+
+## Архітектура поточної панелі
+
+- ASP.NET Core 8 / React 18 / TypeScript / Ant Design 5. Core — моделі/порти, Infrastructure — процеси, API — HTTP. API-типи генеруються зі Swagger.
+- `IStudentAdministration`, `IStudentFiles` → `SambaStudentAdministration` → `SudoRunner` → `/usr/local/sbin/scm-directory` без аргументів. JSON і секрети через stdin, Python `-I`, пароль відсутній в argv. Старий `scm-user` не встановлено для живої панелі.
+- Вебсервіс працює як scm; root bridge перевіряє активність, SID і групу вчителя на кожній операції. Вхід — Kerberos із LDAP SASL sealing (`Credentials.guess(lp)`, MUST_USE_KERBEROS).
+- Учні: scm-students; учителі: vchyteli; адміністратори: Domain Admins. Роль визначає членство, а не формат імені. AccountName нормалізує регістр; старі Login/ClassCode лишаються поза живим шляхом.
+- Нові учні отримують H: `\\school-server.school.test\pupils`, share path `/srv/school/home/%U`. У перенаправленнях не додавати зайвий `%USERNAME%`. `csc policy = disable` на pupils/student1/student2, AppData/Downloads лишаються локальними.
+- Паролі учнів за явним вибором користувача: 7 символів, два склади + три цифри (напр. Mepa234, лише приклад). Доменну складність не вимикати. Обмеження генератора описано в docs/lab-panel.md; не використовувати його для адмінів.
+- Cookie Secure/HttpOnly/SameSiteStrict, 20 хвилин, POST із CSRF, обмеження спроб входу. Аудит Started/Succeeded/Failed — root-only `/var/lib/scm-directory/journal.sqlite3`, без паролів.
+- Учитель бачить усіх звичайних учнів, не лише клас. Файли тільки для читання: до 20 МіБ, 2000 записів у папці, без symlink/hardlink/special files; перевірка O_NOFOLLOW для кожної складової шляху.
+- Зміна пароля не завершує існуючих Windows/SMB-сеансів; NTLM може тимчасово приймати попередній пароль.
+
+## Робочі правила
+
+- Бізнес-порти в Scm.Core; Process/LDAP/IO тільки Infrastructure або вузький перевірений root bridge. Core не залежить від ASP.NET/Infrastructure.
+- Команди через ArgumentList, без shell-конкатенації. Валідація входу до виклику bridge; авторизація повторно всередині bridge.
+- Усі рядки UI через i18n; компоненти Ant Design. Не показувати мок-дані як живий стан. Секрети прибирати після закриття модального вікна.
+- Перевіряти зміни відповідними тестами; серверні тести не доводять застосування політики Windows. `samba-tool gpo list` перевіряє Read, не Apply Group Policy.
+- Нові відтворювані фікстури не мають містити реальних секретів чи учнівських файлів.
+
+## Перевірки та збірка
+
+```sh
+dotnet test
+npm --prefix web ci
+npm --prefix web test -- --run
+npm --prefix web run build
+python3 lab/validate.py
+dotnet publish src/Scm.Api -c Release -r linux-arm64 --self-contained -o out/panel-arm64
+# Для Ubuntu x64 — окремий каталог і -r linux-x64.
 ```
-dotnet build                 # усе рішення
-dotnet test                  # юніт + API-тести (без Pi)
-dotnet test --filter Category=Integration   # проти Pi, потрібен SCM_PI_HOST
-cd web && npm install && npm run dev        # Vite, проксі /api → https://dc1.ad.school.lan або локальний бекенд
-cd web && npm run gen:api    # OpenAPI → src/api/client.ts
-cd web && npm test
-dotnet publish src/Scm.Api -c Release -r linux-arm64 --self-contained -o out/
-```
 
-## Правила
-
-1. Use-case-и в `Scm.Core`; `Process`, LDAP, `System.IO`, SQLite — тільки в `Scm.Infrastructure`. `Scm.Core` не посилається ні на ASP.NET, ні на Infrastructure.
-2. Команди на Pi виконуються лише через `SudoRunner` з `ArgumentList` (кожен аргумент окремо). Ніякої конкатенації рядків у shell. Єдині дозволені програми: `/usr/local/sbin/scm-user`, `scm-status`, `scm-logs`, `snap.sh`, `backup.sh`, `systemctl start scm-update.service`.
-3. `Login`, `ClassCode`, `StorePath` — value-об'єкти з валідацією в конструкторі. Невалідне значення не доходить ні до обгортки, ні до файлової системи. `StorePath` ніколи не виходить за корінь шари (`Path.GetFullPath` + `StartsWith`).
-4. Кожна мутація пише в `IJournal`: `Started` / `Succeeded` / `Failed`, `actor` — з cookie. Паролі ніколи не потрапляють у журнал і логи.
-5. Кожен ендпоінт має явну політику `RequireRole("Teacher")` або `"Admin"`; `FallbackPolicy` = 403.
-6. Усі рядки UI — через i18n (`web/src/i18n/uk.json`). Компоненти — тільки з antd; не писати власних кнопок, таблиць, модалок.
-7. Парсери виводу команд тестуються на фікстурах із `tools/pi-fixtures/`. Нова команда на Pi = нова фікстура в тому ж коміті. Ім'я файлу: `<команда>.<samba-версія>.txt`.
-8. Сесія = одна задача з `docs/plan.md` (розділ «План розробки»). Починається з зелених `dotnet test` і `npm test`, закінчується ними ж. Не починати наступний екран, поки поточний не задеплоєно на Pi.
-
-## Структура
-
-Див. `docs/plan.md` → «Структура репозиторію». Коротко: `src/Scm.Core`, `src/Scm.Infrastructure`, `src/Scm.Api`, `web/`, `pi/` (systemd, sudoers, обгортки, TLS, install.sh), `tests/`, `tools/pi-fixtures/`, `docs/`.
-
-## Рішення, які не переглядаються
-
-- `submit` — підпапка на учня (`class/<клас>/submit/<login>/`), її створює GPO logon-скрипт; «хто не здав» = порожня або відсутня підпапка.
-- Ролі: Admin (`Domain Admins`) і Teacher (`vchyteli`) з M1. Паролі вчителям скидає тільки Admin (`scm-user --teacher`).
-- Кнопка «Оновити» в UI — обов'язкова у v1 (M5).
-- Назва: School Class Manager. Ліцензія: MIT.
-
-## Стан
-
-Етап M0 (інфраструктура за `docs/deployment.md`) — виконується вручну. Код починається з M1, сесія 1: рішення, три проєкти, `Scm.Api` з `/healthz`, `web/` з `AppLayout` на статичних даних мокапу, CI зелений.
+Локально пройдено 109 .NET, 6 React та 4 Python-тести. CI додатково перевіряє синтаксис lab/ і збирає ARM64/x64 артефакти. Збірка x64 не означає перевіреного запуску на шкільному хості. Стан npm audit та інші відкриті межі — у checkpoint.

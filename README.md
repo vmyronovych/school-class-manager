@@ -1,25 +1,55 @@
 # School Class Manager
 
-Web app for a school computer classroom running on the classroom's own Raspberry Pi 4 (Samba AD DC). Teachers open `https://dc1.ad.school.lan` from any classroom PC, sign in with their domain account and manage student accounts, handouts, submitted work and server health — no SSH, no RSAT.
+Панель учителя для шкільного комп’ютерного класу: доменні облікові записи учнів, приватні серверні папки та перегляд учнівських робіт у браузері.
 
-- Backend: ASP.NET Core 8 (Kestrel) on `linux-arm64`, talks to Samba locally (`samba-tool` via a sudo wrapper, LDAP over `ldapi://`, `/srv/data` via `System.IO`).
-- Frontend: React 18 + TypeScript + Ant Design 5, served as static files by Kestrel.
-- Runs as a single systemd service; updates are a tar.gz from GitHub Releases.
+Поточний перевірений варіант: **Ubuntu 24.04 у Multipass на Mac M1 → Samba AD → фізичний Windows 10 Pro Education клієнт**. Запланований шкільний сервер — Ubuntu VM на Windows-ноутбуці Intel/AMD; цей хост і його мережу ще потрібно перевірити.
 
-## Documents
+## Що вже працює
 
-| File | What |
+- Вхід Windows у домен `school.test` та приватний диск H:; учні не мають доступу до папок одне одного.
+- HTTPS-панель: вхід учителя/адміністратора, список реальних учнів, створення акаунта й скидання пароля.
+- Учитель переглядає папки та завантажує роботи через панель; запис/видалення через панель не реалізовані.
+- Windows «Документи» та «Робочий стіл» перенаправляються на сервер; роботу перевірено користувачем для двох учнів.
+- Ручні резервні копії учнівських файлів і домену та ізольована перевірка відновлення. Повне відновлення поточної панелі/TLS ще не охоплене старою процедурою.
+
+**Зафіксований стан, доля PR та наступні кроки:** [docs/checkpoint-2026-11-26.md](docs/checkpoint-2026-11-26.md).
+
+## Як повторити лабораторію
+
+Виконувати послідовно; це інструкції для тестового домену, а не готовий універсальний інсталятор школи.
+
+| Документ | Призначення |
 | --- | --- |
-| `docs/plan.md` | Development plan: scope, architecture, API, security, repo layout, milestones M0–M6, tests, risks, decisions |
-| `docs/deployment.md` | Classroom infrastructure guide (Ukrainian): Pi, Samba AD DC, shares, snapshots, GPO, imaging |
-| `docs/mockups.md` | Screen mockups and antd component map |
-| `CLAUDE.md` | Working rules for Claude Code sessions |
-| `pi/` | Files that live on the Pi: systemd units, sudoers, wrappers, TLS scripts, `install.sh` |
+| [VM і мережа](docs/lab.md) | Multipass на Mac; процедура та неперевірені умови Windows-хоста |
+| [Домен Samba](docs/lab-samba.md) | Створення `school.test`, DNS, пароль адміністратора, вхід Windows |
+| [Учнівські папки](docs/lab-files.md) | H:, особисті каталоги та ізоляція |
+| [Вебпанель](docs/lab-panel.md) | Збірка, встановлення, HTTPS, акаунти та доступ учителя до файлів |
+| [Перенаправлення папок](docs/lab-folder-redirection.md) | GPO для Documents/Desktop і перевірка на Windows |
+| [Копії файлів](docs/lab-backup.md) | Ручна копія та перевірка відновлення |
+| [Відновлення домену](docs/lab-domain-recovery.md) | Ізольована перевірка комплекту Samba |
+| [Скрипти лабораторії](lab/README.md) | Призначення скриптів і місце їх виконання |
 
-## Status
+Адреси, realm та частина початкових акаунтів у `lab/` фіксовані для домашньої лабораторії. Перед школою потрібна адаптація конфігурації. Паролі, приватні ключі, реальні учнівські файли та резервні копії не входять у Git.
 
-Pre-code. Milestone M0 (infrastructure) is done by hand from `docs/deployment.md`; M1 starts with the solution skeleton (see `docs/plan.md` → «Порядок усередині M1»).
+## Розробка
 
-## License
+ASP.NET Core 8, React 18, TypeScript, Ant Design. Панель запускається непривілейованим systemd-сервісом, а вузький Python/Samba bridge виконує дозволені операції через sudo. Паролі передаються через stdin; роль і SID перевіряються на сервері для кожної операції.
 
-MIT — see `LICENSE`.
+Потрібні .NET SDK з `global.json`, Node.js 20+ та Python 3. На Mac/Linux із кореня репозиторію:
+
+```sh
+dotnet test
+npm --prefix web ci
+npm --prefix web test -- --run
+npm --prefix web run build
+python3 lab/validate.py
+dotnet publish src/Scm.Api -c Release -r linux-arm64 --self-contained -o out/panel-arm64
+```
+
+Для Ubuntu на Intel/AMD використовувати `-r linux-x64` та окремий каталог `out/panel-x64`. Це вибір архітектури серверної VM, а не браузера вчителя. CI перевіряє застосунок і скрипти та збирає ARM64/x64 артефакти; збірка x64 не замінює перевірку на шкільному обладнанні.
+
+Старі [план](docs/plan.md), [Pi-інструкція](docs/deployment.md), [мокапи](docs/mockups.md), `pi/` та невикористані моделі збережені як попередні напрацювання. Вони не описують поточне розгортання; пріоритет мають checkpoint і `docs/lab-*.md`.
+
+## Ліцензія
+
+MIT — [LICENSE](LICENSE).
