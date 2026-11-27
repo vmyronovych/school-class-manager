@@ -49,6 +49,44 @@ public sealed class PupilApiTests
     }
 
     [Fact]
+    public async Task ReportsAreBoundToRegisteredDeviceAndCanOnlyBeReadByStaff()
+    {
+        var state = System.IO.Directory.CreateTempSubdirectory();
+        try
+        {
+            await using var factory = new PanelFactory();
+            await using var scoped = factory.WithWebHostBuilder(b => b.ConfigureServices(services =>
+                services.AddSingleton(new Scm.Infrastructure.DeviceReports(state.FullName))));
+            using var client = scoped.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
+            (await client.GetAsync(new Uri("/api/devices", UriKind.Relative))).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+            await SignIn(client);
+            await Csrf(client);
+            var actor = new TeacherSession("teacher1", "Teacher", "Teacher", "sid");
+            factory.Directory.SessionAsync(Arg.Any<TeacherSession>(), Arg.Any<CancellationToken>()).Returns(actor);
+            var registration = new RegisterDevice("PC-A", false);
+            (await client.PostAsJsonAsync("/api/devices", registration)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+            factory.Directory.SessionAsync(Arg.Any<TeacherSession>(), Arg.Any<CancellationToken>()).Returns(actor with { Role = "Admin" });
+            using var created = await client.PostAsJsonAsync("/api/devices", registration);
+            created.EnsureSuccessStatusCode();
+            var key = (await created.Content.ReadFromJsonAsync<ReportKey>())!.Key;
+            var status = new Scm.Core.Model.AgentStatus("PC-A", "school.test", "Windows", "19043", 77, 4, false);
+            (await client.PostAsJsonAsync("/agent/status", status)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+            using var device = scoped.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
+            device.DefaultRequestHeaders.Authorization = new("Bearer", key);
+            (await client.PostAsJsonAsync("/api/devices", registration with { ComputerName = "PC-B" })).EnsureSuccessStatusCode();
+            (await device.PostAsJsonAsync("/agent/status", status with { ComputerName = "PC-B" })).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+            (await device.PostAsJsonAsync("/agent/status", status)).StatusCode.Should().Be(HttpStatusCode.NoContent);
+            var devices = await client.GetFromJsonAsync<Scm.Infrastructure.DeviceView[]>("/api/devices");
+            var pc = devices!.Single(d => d.ComputerName == "PC-A");
+            pc.ReceivedAt.Should().NotBeNull();
+            pc.Status.Should().Be(status);
+            (await client.PostAsJsonAsync("/api/devices", registration with { Replace = true })).EnsureSuccessStatusCode();
+            (await device.PostAsJsonAsync("/agent/status", status)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        }
+        finally { state.Delete(true); }
+    }
+
+    [Fact]
     public async Task AnonymousCannotReadStudents()
     {
         await using var factory = new PanelFactory();

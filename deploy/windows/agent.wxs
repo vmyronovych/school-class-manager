@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="School Class Manager Agent" Language="1033" Version="$(var.Version)" Manufacturer="School Class Manager" UpgradeCode="B5CA51DB-CDF3-451F-B596-66B86AECED85">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine"/>
+    <MajorUpgrade DowngradeErrorMessage="A newer version of School Class Manager Agent is installed."/>
+    <Media Id="1" Cabinet="agent.cab" EmbedCab="yes"/>
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder"><Directory Id="Vendor" Name="School Class Manager"><Directory Id="InstallFolder" Name="Agent">
+        <Directory Id="ReleaseDir" Name="$(var.Version)">
+        <Component Id="Service" Guid="*" Win64="yes">
+          <File Id="AgentExe" Source="Scm.Agent.exe" KeyPath="yes"/>
+          <ServiceInstall Id="ScmAgent" Name="ScmAgent" DisplayName="School Class Manager Agent" Description="Report school workstation status" Type="ownProcess" Start="auto" ErrorControl="normal" Account="NT SERVICE\ScmAgent" Arguments="service"/>
+          <ServiceControl Id="ControlAgent" Name="ScmAgent" Start="install" Stop="both" Remove="both" Wait="yes"/>
+          <RegistryValue Root="HKLM" Key="SYSTEM\CurrentControlSet\Services\EventLog\Application\ScmAgent" Name="TypesSupported" Type="integer" Value="7"/>
+        </Component>
+        </Directory>
+      </Directory></Directory></Directory>
+    </Directory>
+    <Feature Id="Agent" Title="School Class Manager Agent" Level="1"><ComponentRef Id="Service"/></Feature>
+  </Product>
+</Wix>

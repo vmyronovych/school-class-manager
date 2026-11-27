@@ -1,0 +1,7 @@
+{
+  "realm": "AD.SCHOOL.EXAMPLE",
+  "domain": "SCHOOL",
+  "address": "192.168.10.10",
+  "lan_interface": "eth0",
+  "dns_forwarder": "192.168.10.1"
+}

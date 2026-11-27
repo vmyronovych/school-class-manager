@@ -1,3 +1,0 @@
-#cloud-config
-# Explicit timezone for both macOS and Windows hosts.
-timezone: Europe/Kyiv

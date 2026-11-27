@@ -4,6 +4,101 @@
  */
 
 export interface paths {
+    "/api/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DeviceView"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["RegisterDevice"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReportKey"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agent/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AgentStatus"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -337,45 +432,72 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AgentStatus: {
+            computerName: string;
+            domain: null | string;
+            windowsEdition: string;
+            windowsBuild: string;
+            /** Format: double */
+            systemDriveFreeGiB: null | number | string;
+            /** Format: int32 */
+            nonSystemProfileCount: null | number | string;
+            sharedPcEnabled: null | boolean;
+            agentVersion?: null | string;
+        };
         CreatePupil: {
-            login?: string;
-            givenName?: string;
-            surname?: string;
+            login: string;
+            givenName: string;
+            surname: string;
         };
         CsrfResponse: {
-            token?: string;
+            token: string;
+        };
+        DeviceView: {
+            computerName: string;
+            /** Format: date-time */
+            receivedAt: null | string;
+            status: null | components["schemas"]["AgentStatus"];
+            /** @default false */
+            managed: boolean;
         };
         HealthResponse: {
-            ok?: boolean;
-            version?: string;
+            ok: boolean;
+            version: string;
         };
         LoginRequest: {
-            login?: string;
-            password?: string;
+            login: string;
+            password: string;
         };
         PupilAccount: {
-            login?: string;
-            displayName?: string;
-            enabled?: boolean;
-            homeDirectory?: string | null;
+            login: string;
+            displayName: string;
+            enabled: boolean;
+            homeDirectory: null | string;
         };
         PupilCredentials: {
-            login?: string;
-            password?: string;
+            login: string;
+            password: string;
         };
         PupilFileEntry: {
-            name?: string;
-            directory?: boolean;
+            name: string;
+            directory: boolean;
             /** Format: int64 */
-            size?: number | null;
+            size: null | number | string;
             /** Format: date-time */
-            modified?: string;
+            modified: string;
+        };
+        RegisterDevice: {
+            computerName: string;
+            replace: boolean;
+        };
+        ReportKey: {
+            key: string;
         };
         TeacherSession: {
-            login?: string;
-            displayName?: string;
-            role?: string;
-            sid?: string;
+            login: string;
+            displayName: string;
+            role: string;
+            sid: string;
         };
     };
     responses: never;

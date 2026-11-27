@@ -9,11 +9,11 @@ public sealed class SambaStudentAdministrationTests
     [Fact]
     public async Task ParsesFileMetadataAndBinaryDownloadThroughStdinOnly()
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "../../../../../tools/pi-fixtures/panel/files.4.19.5.json");
+        var path = Path.Combine(AppContext.BaseDirectory, "../../../../../tests/fixtures/files.4.19.5.json");
         var output = await File.ReadAllTextAsync(path);
         var process = Substitute.For<IProcessRunner>();
         process.RunAsync(Arg.Any<ProcessSpec>(), Arg.Any<CancellationToken>()).Returns(new ProcessResult(0, output, "", false));
-        var directory = new SambaStudentAdministration(new SudoRunner(process));
+        var directory = new SambaStudentAdministration(process);
         var actor = new TeacherSession("teacher1", "Teacher", "Teacher", "sid");
         var entries = await directory.ListFilesAsync(actor, "student1", "", CancellationToken.None);
         entries.Should().HaveCount(2);
@@ -33,7 +33,7 @@ public sealed class SambaStudentAdministrationTests
         var process = Substitute.For<IProcessRunner>();
         process.RunAsync(Arg.Any<ProcessSpec>(), Arg.Any<CancellationToken>()).Returns(new ProcessResult(0,
             """{"data":{"login":"teacher1","displayName":"Teacher","role":"Teacher","sid":"test-sid"}}""", "", false));
-        var directory = new SambaStudentAdministration(new SudoRunner(process));
+        var directory = new SambaStudentAdministration(process);
         var result = await directory.AuthenticateAsync("Teacher1", "example-only-secret", CancellationToken.None);
         result.Login.Should().Be("teacher1");
         await process.Received(1).RunAsync(Arg.Is<ProcessSpec>(s =>
@@ -48,7 +48,7 @@ public sealed class SambaStudentAdministrationTests
     public async Task InvalidTargetNeverReachesProcess(string login)
     {
         var process = Substitute.For<IProcessRunner>();
-        var directory = new SambaStudentAdministration(new SudoRunner(process));
+        var directory = new SambaStudentAdministration(process);
         var action = () => directory.ResetAsync(new TeacherSession("teacher1", "Teacher", "Teacher", "sid"), login, CancellationToken.None);
         await action.Should().ThrowAsync<ArgumentException>();
         await process.DidNotReceiveWithAnyArgs().RunAsync(default!, default);
@@ -57,11 +57,11 @@ public sealed class SambaStudentAdministrationTests
     [Fact]
     public async Task ParsesServerListFixture()
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "../../../../../tools/pi-fixtures/panel/list.4.19.5.json");
+        var path = Path.Combine(AppContext.BaseDirectory, "../../../../../tests/fixtures/list.4.19.5.json");
         var output = await File.ReadAllTextAsync(path);
         var process = Substitute.For<IProcessRunner>();
         process.RunAsync(Arg.Any<ProcessSpec>(), Arg.Any<CancellationToken>()).Returns(new ProcessResult(0, output, "", false));
-        var directory = new SambaStudentAdministration(new SudoRunner(process));
+        var directory = new SambaStudentAdministration(process);
         var result = await directory.ListAsync(new TeacherSession("teacher1", "Teacher", "Teacher", "sid"), CancellationToken.None);
         result.Single().Login.Should().Be("student1");
         result.Single().HomeDirectory.Should().Be(@"\\school-server.school.test\student1");

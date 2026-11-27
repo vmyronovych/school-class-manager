@@ -1,69 +1,32 @@
 {
   "app": {
-    "name": "School Class Manager",
-    "server": "SCHOOL · dc1",
-    "serverOnline_one": "{{host}} онлайн · {{count}} день",
-    "serverOnline_few": "{{host}} онлайн · {{count}} дні",
-    "serverOnline_many": "{{host}} онлайн · {{count}} днів",
-    "serverOnline_other": "{{host}} онлайн · {{count}} дня",
-    "notifications": "Сповіщення"
+    "name": "School Class Manager"
+  },
+  "devices": {
+    "title": "Комп’ютери",
+    "pc": "Ім’я ПК",
+    "lastSeen": "Останній звіт",
+    "waiting": "Очікуємо перший звіт",
+    "domain": "Домен",
+    "free": "Вільно, ГіБ",
+    "profiles": "Профілі",
+    "on": "Увімкнено",
+    "off": "Вимкнено",
+    "add": "Зареєструвати ПК",
+    "empty": "Ще немає зареєстрованих комп’ютерів",
+    "rotate": "Замінити ключ",
+    "confirmRotate": "Замінити ключ цього ПК? Попередній ключ втратить чинність.",
+    "key": "Ключ для {{name}}",
+    "copyHint": "Скопіюйте ключ і вставте його в запит агента на цьому ПК.",
+    "nameHint": "Введіть ім’я Windows-комп’ютера (до 15 латинських літер, цифр або дефісів).",
+    "version": "Версія агента",
+    "managed": "Керує домен"
   },
   "nav": {
-    "dashboard": "Огляд",
-    "students": "Учні",
-    "files": "Файли",
-    "server": "Сервер",
-    "settings": "Налаштування"
-  },
-  "stub": {
-    "comingIn": "Цей екран з'явиться на етапі {{milestone}}."
-  },
-  "students": {
-    "allClasses": "Усі класи",
-    "summary": "{{accounts}} облікових записів · {{classes}} класи · {{disabled}} вимкнених",
-    "importCsv": "Імпорт CSV",
-    "loginCards": "Картки логінів",
-    "addStudent": "Учень",
-    "filterAll": "Усі",
-    "filterTeachers": "Вчителі",
-    "searchPlaceholder": "Пошук за прізвищем або логіном",
-    "selected": "Вибрано: {{count}}",
-    "total": "Всього {{total}}",
-    "columns": {
-      "login": "Логін",
-      "name": "Прізвище, ім'я",
-      "class": "Клас",
-      "status": "Статус",
-      "lastLogon": "Останній вхід",
-      "folder": "Папка"
-    },
-    "status": {
-      "Active": "Активний",
-      "Locked": "Заблокований",
-      "NeverLoggedIn": "Не входив",
-      "Disabled": "Вимкнений"
-    },
-    "card": {
-      "login": "Логін",
-      "class": "Клас",
-      "lastLogon": "Останній вхід",
-      "folder": "Папка",
-      "folderValue": "{{files}} файлів · {{size}}",
-      "password": "Пароль",
-      "passwordChanged": "змінено {{date}}",
-      "resetPassword": "Скинути пароль",
-      "files": "Файли",
-      "unlock": "Розблокувати",
-      "move": "Перевести",
-      "disable": "Вимкнути",
-      "snapshots": "Знімки папки",
-      "allSnapshots": "Усі 30 днів",
-      "restore": "Відновити…",
-      "empty": "Виберіть учня в таблиці"
-    }
+    "students": "Учні"
   },
   "panel": {
-    "signInHint": "Увійдіть обліковим записом учителя або адміністратора домену.",
+    "signInHint": "Увійдіть за допомогою облікового запису вчителя або адміністратора домену.",
     "login": "Логін",
     "password": "Пароль",
     "required": "Заповніть поле",

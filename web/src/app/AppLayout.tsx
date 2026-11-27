@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Outlet } from 'react-router';
+import { Link, Outlet } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Alert, Button, Card, Flex, Form, Input, Layout, Spin, Typography } from 'antd';
@@ -17,6 +17,7 @@ export function AppLayout() {
   useEffect(() => {
     const expire = () => {
       setExpired(true);
+      cache.removeQueries({ queryKey: ['devices'] });
       cache.removeQueries({ queryKey: ['students'] });
       cache.removeQueries({ queryKey: ['files'] });
     };
@@ -69,6 +70,8 @@ export function AppLayout() {
       <Flex justify="space-between" align="center" wrap gap={12}>
         <Typography.Text strong style={{ color: '#fff', fontSize: 18 }}><BookOutlined /> {t('app.name')}</Typography.Text>
         <Flex align="center" gap={16}>
+          <Link style={{ color: '#fff' }} to="/students">{t('nav.students')}</Link>
+          <Link style={{ color: '#fff' }} to="/devices">{t('devices.title')}</Link>
           <Typography.Text style={{ color: '#fff' }}>{session.data.displayName}</Typography.Text>
           <Button icon={<LogoutOutlined />} onClick={() => void signOut()} loading={busy}>{t('panel.signOut')}</Button>
         </Flex>

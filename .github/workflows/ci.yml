@@ -1,66 +1,53 @@
-name: CI
-
+name: School deployment
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
-
+  workflow_dispatch:
+permissions:
+  contents: read
 jobs:
-  lab:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Validate lab scripts and folder-redirection format
-        run: python3 lab/validate.py
-
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
-
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: web/package-lock.json
-
-      - name: dotnet build
-        run: dotnet build
-
-      - name: dotnet test
-        run: dotnet test --no-build
-
-      - name: web install
-        working-directory: web
-        run: npm ci
-
-      - name: web test
-        working-directory: web
-        run: npm test -- --run
-
-      - name: web build
-        working-directory: web
-        run: npm run build
-
-      - name: publish linux-arm64
-        run: dotnet publish src/Scm.Api -c Release -r linux-arm64 --self-contained -o out/linux-arm64/
-
-      - name: publish linux-x64
-        run: dotnet publish src/Scm.Api -c Release -r linux-x64 --self-contained -o out/linux-x64/
-
+      - run: sudo apt-get update && sudo apt-get install -y wixl msitools
+      - run: dotnet test -c Release
+      - run: python3 tests/test_folder_redirection.py
+      - run: bash deploy/package.sh amd64
+      - run: npm --prefix web test -- --run
+      - name: Extract the same MSI that schools receive
+        run: tar -xzf out/scm-*-amd64.tar.gz -C out --wildcards './*.msi'
       - uses: actions/upload-artifact@v4
         with:
-          name: scm-linux-arm64
-          path: out/linux-arm64/
-
+          name: school-server-amd64
+          path: |
+            out/*.tar.gz
+            out/*.sha256
       - uses: actions/upload-artifact@v4
         with:
-          name: scm-linux-x64
-          path: out/linux-x64/
+          name: msi
+          path: out/*.msi
+  windows:
+    needs: build
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: msi
+          path: out
+      - name: Clean install, service migration, restart and removal
+        shell: pwsh
+        run: |
+          $msi = (Get-ChildItem out/*.msi).FullName
+          python tests/windows-agent/smoke.py $msi

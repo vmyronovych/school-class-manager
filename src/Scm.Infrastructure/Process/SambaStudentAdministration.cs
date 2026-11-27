@@ -4,7 +4,7 @@ using Scm.Core.Ports;
 
 namespace Scm.Infrastructure.Process;
 
-public sealed class SambaStudentAdministration(SudoRunner runner) : IStudentAdministration, IStudentFiles
+public sealed class SambaStudentAdministration(IProcessRunner runner) : IStudentAdministration, IStudentFiles
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -42,8 +42,8 @@ public sealed class SambaStudentAdministration(SudoRunner runner) : IStudentAdmi
 
     private async Task<T> CallAsync<T>(object request, CancellationToken ct)
     {
-        var result = await runner.RunAsync(SudoProgram.ScmDirectory, [], JsonSerializer.Serialize(request, Json),
-            TimeSpan.FromSeconds(30), ct).ConfigureAwait(false);
+        var result = await runner.RunAsync(new ProcessSpec("/usr/bin/sudo", ["-n", "/usr/local/sbin/scm-directory"],
+            JsonSerializer.Serialize(request, Json), TimeSpan.FromSeconds(30)), ct).ConfigureAwait(false);
         if (!result.Succeeded)
         {
             throw new DirectoryOperationException("unavailable");
