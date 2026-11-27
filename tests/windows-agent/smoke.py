@@ -36,7 +36,8 @@ def install_msi(msi, action, directory):
 def test_agent(msi, directory):
     import shutil
     install_msi(msi, "/i", directory)
-    installed = Path(os.environ["ProgramFiles"]) / "School Class Manager" / "Agent" / "Scm.Agent.exe"
+    agent_directory = Path(os.environ["ProgramFiles"]) / "School Class Manager" / "Agent"
+    installed, = agent_directory.glob("[0-9]*/Scm.Agent.exe")
     exe = directory / "Scm.Agent.exe"
     shutil.copyfile(installed, exe)
     run("powershell", "-NoProfile", "-Command", "if ((Get-Service ScmAgent).Status -ne 'Running') { throw 'Service stopped' }")
@@ -84,6 +85,8 @@ def test_agent(msi, directory):
             run(exe, "install", f"https://localhost:{server.server_port}", directory / "ca.cer", input=key + "\n", text=True)
             check_status(reports.get(timeout=60))
             install_msi(msi, "/i", directory)
+            service_config = subprocess.check_output(["sc.exe", "qc", "ScmAgent"], text=True)
+            assert str(installed).lower() in service_config.lower()
             check_status(reports.get(timeout=60))
             run("powershell", "-NoProfile", "-Command", "Restart-Service ScmAgent -ErrorAction Stop")
             check_status(reports.get(timeout=60))

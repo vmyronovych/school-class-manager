@@ -6,12 +6,14 @@
     <Media Id="1" Cabinet="agent.cab" EmbedCab="yes"/>
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFiles64Folder"><Directory Id="Vendor" Name="School Class Manager"><Directory Id="InstallFolder" Name="Agent">
-        <Component Id="Service" Guid="03B081EB-3819-45D8-8483-7EE75C53BE51" Win64="yes">
+        <Directory Id="ReleaseDir" Name="$(var.Version)">
+        <Component Id="Service" Guid="*" Win64="yes">
           <File Id="AgentExe" Source="Scm.Agent.exe" KeyPath="yes"/>
           <ServiceInstall Id="ScmAgent" Name="ScmAgent" DisplayName="School Class Manager Agent" Description="Report school workstation status" Type="ownProcess" Start="auto" ErrorControl="normal" Account="NT SERVICE\ScmAgent" Arguments="service"/>
           <ServiceControl Id="ControlAgent" Name="ScmAgent" Start="install" Stop="both" Remove="both" Wait="yes"/>
           <RegistryValue Root="HKLM" Key="SYSTEM\CurrentControlSet\Services\EventLog\Application\ScmAgent" Name="TypesSupported" Type="integer" Value="7"/>
         </Component>
+        </Directory>
       </Directory></Directory></Directory>
     </Directory>
     <Feature Id="Agent" Title="School Class Manager Agent" Level="1"><ComponentRef Id="Service"/></Feature>

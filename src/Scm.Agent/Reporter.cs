@@ -15,7 +15,8 @@ internal sealed class Reporter : IDisposable
     public static async Task ReportAsync(CancellationToken token)
     {
         var status = Inventory.Read();
-        var directory = Path.Combine(AppContext.BaseDirectory, "config");
+        var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            "School Class Manager", "Agent", "config");
         var legacy = Path.Combine(directory, "agent.json");
         Settings? settings = null;
         string? caPath = null;
