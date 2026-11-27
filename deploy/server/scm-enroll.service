@@ -1,0 +1,7 @@
+[Unit]
+Description=Prepare credentials for approved school computers
+After=samba-ad-dc.service
+Requires=samba-ad-dc.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/scm-sync-devices

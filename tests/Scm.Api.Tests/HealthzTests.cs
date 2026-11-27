@@ -14,6 +14,6 @@ public class HealthzTests(WebApplicationFactory<Program> factory) : IClassFixtur
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await response.Content.ReadAsStringAsync();
-        body.Should().Be("""{"ok":true,"version":"0.1.0"}""");
+        body.Should().Be("""{"ok":true,"version":"0.2.0"}""");
     }
 }

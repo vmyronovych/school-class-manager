@@ -1,0 +1,5 @@
+[Unit]
+Description=Renew the school panel certificate
+[Service]
+Type=oneshot
+ExecStart=/opt/scm-panel/current/server/panel-tls.sh

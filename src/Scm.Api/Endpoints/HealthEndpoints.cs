@@ -6,7 +6,6 @@ public static class HealthEndpoints
 {
     public static IEndpointRouteBuilder MapHealth(this IEndpointRouteBuilder app)
     {
-        // M4 додасть перевірки Samba, LDAP і диска.
         app.MapGet("/healthz", () => TypedResults.Ok(new HealthResponse(true, AppVersion.Current)))
             .AllowAnonymous().WithName("GetHealth")
             .WithTags("Health");

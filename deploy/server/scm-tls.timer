@@ -1,0 +1,7 @@
+[Unit]
+Description=Check school panel certificate lifetime
+[Timer]
+OnCalendar=weekly
+Persistent=yes
+[Install]
+WantedBy=timers.target
